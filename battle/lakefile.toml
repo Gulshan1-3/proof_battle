@@ -1,0 +1,10 @@
+name = "proofenv"
+version = "0.1.0"
+defaultTargets = ["proofenv"]
+
+[[lean_lib]]
+name = "Proofenv"
+
+[[lean_exe]]
+name = "proofenv"
+root = "Main"

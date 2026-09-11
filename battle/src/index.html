@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head><title>WS Test</title></head>
+<body>
+<h1>WebSocket Client</h1>
+<script>
+const socket = new WebSocket("ws://localhost:3000/ws");
+
+socket.onopen = () => {
+    console.log("✅ WebSocket connected");
+    socket.send("hello");
+};
+
+socket.onmessage = (event) => {
+    console.log("📨 Message from server:", event.data);
+};
+
+socket.onclose = () => {
+    console.log("❌ WebSocket closed");
+};
+
+socket.onerror = (error) => {
+    console.error("⚠️ WebSocket error:", error);
+};
+</script>
+</body>
+</html>
