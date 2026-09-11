@@ -4,37 +4,13 @@ proof_battle_implementation_prompts.md
 FRONTEND_PROMPTS.md
 RUST_BACKEND_PROMPTS.md
 
-# === Mathlib4 library source & infrastructure (not our code) ===
-battle/mathlib4/
-battle/Mathlib/
-battle/Archive/
-battle/Counterexamples/
-battle/MathlibTest/
-battle/DownstreamTest/
-battle/LongestPole/
-battle/Shake/
-battle/Cache/
-battle/docs/
-battle/scripts/
-battle/widget/
-battle/Archive.lean
-battle/Counterexamples.lean
-battle/Mathlib.lean
-battle/docs.lean
-
-# === Large build/cache directories (13+ GB) ===
-battle/.lake/
-battle/target/
-
-# === Generated / runtime files ===
-battle/proofs/
+# === Only keep battle/src/, ignore everything else in battle/ ===
+battle/*
+!battle/src/
 
 # === Lean build artifacts ===
 *.olean
 *.ilean
-
-# === Rust build artifacts ===
-Cargo.lock
 
 # === OS files ===
 .DS_Store
