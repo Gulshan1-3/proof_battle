@@ -1,31 +1,44 @@
-# === Prompt / implementation plan files (not for public repo) ===
-frontend_implementation_prompts.md
-proof_battle_implementation_prompts.md
-FRONTEND_PROMPTS.md
-RUST_BACKEND_PROMPTS.md
+# === Rust ===
+target
+target/
+server/target/
+battle/target/
+*.rs.bk
 
-# === Only keep battle/src/, ignore everything else in battle/ ===
-battle/*
-!battle/src/
+# === Node / Frontend ===
+node_modules
+node_modules/
+frontend/node_modules/
+.svelte-kit/
+build/
+dist/
+.vite/
 
-# === Lean build artifacts ===
+# === Lean Build Artifacts & Ephemeral Files ===
 *.olean
 *.ilean
+.lake/build/
+lean/.lake/build/
+battle/.lake/build/
+proofs/
+lean/proofs/
+battle/proofs/
 
-# === OS files ===
+# === Local Environment Configuration ===
+.env
+.env.local
+!.env.example
+
+# === Editors & OS ===
 .DS_Store
 Thumbs.db
-
-# === Editor files ===
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
-.vscode/
-.idea/
 
-# === Node / frontend (if created later) ===
-node_modules/
-.svelte-kit/
-dist/
-build/
-.vite/
+# === Test & Coverage Output ===
+coverage/
+test-results/
+playwright-report/

@@ -1,0 +1,20 @@
+[package]
+name = "battle"
+version = "0.1.0"
+edition = "2024"
+
+
+
+
+[dependencies]
+
+axum = { version = "0.7", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.21"
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+rand = "0.9.1"
+rand_chacha = "0.9.0"
+rand_core = "0.9.3"
