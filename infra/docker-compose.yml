@@ -1,0 +1,4 @@
+# ProofBattle Infrastructure
+# Will be configured in stage S9
+version: '3.8'
+services: {}

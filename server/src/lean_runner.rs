@@ -1,17 +1,22 @@
 use std::{fs, process::Command, time::{Duration, Instant}};
 use std::thread::sleep;
+use crate::config::Config;
 
-pub fn run_proof(code: &str, filename: &str) -> Result<String, String> {
-    let path = format!("proofs/{}", filename);
+// TODO(S2): convert to tokio::process::Command
+pub fn run_proof(code: &str, filename: &str, config: &Config) -> Result<String, String> {
+    if !config.proof_tmp_dir.exists() {
+        let _ = fs::create_dir_all(&config.proof_tmp_dir);
+    }
+    let path = config.proof_tmp_dir.join(filename);
     fs::write(&path, code).map_err(|e| e.to_string())?;
 
     let start = Instant::now();
 
     let output = Command::new("lake")
-        .current_dir(".")
+        .current_dir(&config.lean_project_dir)
         .arg("env")
         .arg("lean")
-        .arg(format!("proofs/{}", filename))
+        .arg(&path)
         .output();
 
     let duration = start.elapsed();
@@ -28,4 +33,3 @@ pub fn run_proof(code: &str, filename: &str) -> Result<String, String> {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
     }
 }
-

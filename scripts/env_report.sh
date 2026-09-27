@@ -6,7 +6,14 @@ export PATH="$HOME/.elan/bin:$HOME/.cargo/bin:$PATH"
 export ELAN_DISABLE_UPDATE_CHECK=1
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-LEAN_DIR="$REPO_ROOT/battle"
+if [ -d "$REPO_ROOT/lean" ]; then
+    LEAN_DIR="$REPO_ROOT/lean"
+elif [ -d "$REPO_ROOT/battle" ]; then
+    LEAN_DIR="$REPO_ROOT/battle"
+else
+    echo "ERROR: Cannot find Lean project root (checked lean/ and battle/)" >&2
+    exit 1
+fi
 
 # 1. Verify lake is present
 if ! command -v lake >/dev/null 2>&1; then
