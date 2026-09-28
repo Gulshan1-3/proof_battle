@@ -1,0 +1,11 @@
+{
+  "id": "lean_aggregate_import",
+  "category": "env",
+  "goal": "True",
+  "imports": [
+    "import Mathlib"
+  ],
+  "body": "trivial",
+  "expect": "reject",
+  "reject_reason": "LeaningFailed"
+}

@@ -1,31 +1,58 @@
+# === Documentation & Prompts (Internal Specs) ===
+docs/
+*/docs/
+frontend/docs/
+lean/docs/
+
+# === Large Assets & Toolchains ===
+infra/sandbox/toolchain/
+**/toolchain/
+rootfs/
+*.tar
+*.tar.gz
+*.tar.xz
+*.zip
+*.iso
+
+# === Large Problem Datasets ===
+problems_import.jsonl
+problems_verified_imports.jsonl
+
 # === Rust ===
-target
 target/
+**/target/
 server/target/
 battle/target/
 *.rs.bk
 
 # === Node / Frontend ===
-node_modules
 node_modules/
+**/node_modules/
 frontend/node_modules/
 .svelte-kit/
+frontend/.svelte-kit/
 build/
+frontend/build/
 dist/
+frontend/dist/
 .vite/
+frontend/.vite/
 
 # === Lean Build Artifacts & Ephemeral Files ===
 *.olean
 *.ilean
-.lake/build/
-lean/.lake/build/
-battle/.lake/build/
+.lake/
+**/.lake/
+lean/.lake/
+battle/.lake/
 proofs/
+**/proofs/
 lean/proofs/
 battle/proofs/
 
 # === Local Environment Configuration ===
 .env
+.env.*
 .env.local
 !.env.example
 
@@ -40,5 +67,15 @@ Thumbs.db
 
 # === Test & Coverage Output ===
 coverage/
+**/coverage/
 test-results/
+**/test-results/
 playwright-report/
+**/playwright-report/
+
+# === Logs & Temporary Files ===
+*.log
+logs/
+*.tmp
+.cache/
+

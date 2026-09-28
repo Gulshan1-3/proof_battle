@@ -1,0 +1,11 @@
+{
+  "id": "filter_false_positive",
+  "category": "filter",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "-- #eval is dangerous\nexact \"#eval\"",
+  "expect": "accept",
+  "reject_reason": null
+}

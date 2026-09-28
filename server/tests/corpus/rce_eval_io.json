@@ -1,0 +1,11 @@
+{
+  "id": "rce_eval_io",
+  "category": "rce",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "#eval IO.getEnv",
+  "expect": "reject",
+  "reject_reason": "RejectedByFilter"
+}

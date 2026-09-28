@@ -1,0 +1,11 @@
+{
+  "id": "happy_add_zero",
+  "category": "happy",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "intro n\nsimp",
+  "expect": "accept",
+  "reject_reason": null
+}

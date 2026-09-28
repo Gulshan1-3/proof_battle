@@ -15,7 +15,10 @@ impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConfigError::InvalidValue { var, val, expected } => {
-                write!(f, "invalid value for {var}: \"{val}\" (expected {expected})")
+                write!(
+                    f,
+                    "invalid value for {var}: \"{val}\" (expected {expected})"
+                )
             }
         }
     }
@@ -34,25 +37,26 @@ impl std::error::Error for ConfigError {}
 #[derive(Clone, Debug)]
 pub struct Config {
     pub bind_addr: String,
-    pub lean_project_dir: PathBuf,     // the lake project root (lean/)
-    pub proof_tmp_dir: PathBuf,        // where submissions are materialised
-    pub proof_max_bytes: usize,        // default 8192
-    pub proof_max_lines: usize,        // default 120
-    pub lean_timeout: Duration,        // default 30s
-    pub lean_max_heartbeats: u32,      // default 200_000
-    pub lean_max_memory_mb: u32,       // default 2048
-    pub lean_pool_size: usize,         // default 4
-    pub job_queue_capacity: usize,     // default 256
-    pub submit_lane_reserve: usize,    // default 2   (ADR-008)
-    pub check_lane_capacity: usize,    // default 8
-    pub session_ttl: Duration,         // default 60s
-    pub rate_limit_submissions: u32,   // default 5 per window
-    pub rate_limit_window: Duration,   // default 60s
-    pub database_url: Option<String>,  // None => in-memory problem source
-    pub sandbox_enabled: bool,         // default false in dev, MUST be true in prod
-    pub sandbox_image: String,         // default "proofbattle/lean-sandbox:lean-4.21.0-rc3"
-    pub protocol_version: u32,         // default 1
-    pub log_filter: String,            // default "proof_battle_server=info"
+    pub lean_project_dir: PathBuf,    // the lake project root (lean/)
+    pub proof_tmp_dir: PathBuf,       // where submissions are materialised
+    pub proof_max_bytes: usize,       // default 8192
+    pub proof_max_lines: usize,       // default 120
+    pub lean_timeout: Duration,       // default 30s
+    pub lean_max_heartbeats: u32,     // default 200_000
+    pub lean_max_memory_mb: u32,      // default 2048
+    pub lean_pool_size: usize,        // default 4
+    pub job_queue_capacity: usize,    // default 256
+    pub submit_lane_reserve: usize,   // default 2   (ADR-008)
+    pub check_lane_capacity: usize,   // default 8
+    pub session_ttl: Duration,        // default 60s
+    pub rate_limit_submissions: u32,  // default 5 per window
+    pub rate_limit_window: Duration,  // default 60s
+    pub database_url: Option<String>, // None => in-memory problem source
+    pub sandbox_enabled: bool,        // default false in dev, MUST be true in prod
+    pub sandbox_image: String,        // default "proofbattle/lean-sandbox:lean-4.21.0-rc3"
+    pub reconnect_grace_window: Duration, // default 10s
+    pub protocol_version: u32,        // default 1
+    pub log_filter: String,           // default "proof_battle_server=info"
 }
 
 impl Config {
@@ -86,8 +90,14 @@ impl Config {
         let lean_timeout_secs = parse_u64(map, "LEAN_TIMEOUT", 30, "integer seconds")?;
         let lean_timeout = Duration::from_secs(lean_timeout_secs);
 
-        let lean_max_heartbeats = parse_u32(map, "LEAN_MAX_HEARTBEATS", 200_000, "positive integer")?;
-        let lean_max_memory_mb = parse_u32(map, "LEAN_MAX_MEMORY_MB", 2048, "positive integer megabytes")?;
+        let lean_max_heartbeats =
+            parse_u32(map, "LEAN_MAX_HEARTBEATS", 200_000, "positive integer")?;
+        let lean_max_memory_mb = parse_u32(
+            map,
+            "LEAN_MAX_MEMORY_MB",
+            2048,
+            "positive integer megabytes",
+        )?;
         let lean_pool_size = parse_usize(map, "LEAN_POOL_SIZE", 4, "positive integer")?;
         let job_queue_capacity = parse_usize(map, "JOB_QUEUE_CAPACITY", 256, "positive integer")?;
         let submit_lane_reserve = parse_usize(map, "SUBMIT_LANE_RESERVE", 2, "positive integer")?;
@@ -96,17 +106,27 @@ impl Config {
         let session_ttl_secs = parse_u64(map, "SESSION_TTL", 60, "integer seconds")?;
         let session_ttl = Duration::from_secs(session_ttl_secs);
 
-        let rate_limit_submissions = parse_u32(map, "RATE_LIMIT_SUBMISSIONS", 5, "positive integer")?;
+        let rate_limit_submissions =
+            parse_u32(map, "RATE_LIMIT_SUBMISSIONS", 5, "positive integer")?;
         let rate_limit_window_secs = parse_u64(map, "RATE_LIMIT_WINDOW", 60, "integer seconds")?;
         let rate_limit_window = Duration::from_secs(rate_limit_window_secs);
 
         let database_url = map.get("DATABASE_URL").filter(|s| !s.is_empty()).cloned();
 
-        let sandbox_enabled = parse_bool(map, "SANDBOX_ENABLED", false, "boolean (true/false/1/0)")?;
+        let sandbox_enabled =
+            parse_bool(map, "SANDBOX_ENABLED", false, "boolean (true/false/1/0)")?;
         let sandbox_image = map
             .get("SANDBOX_IMAGE")
             .cloned()
             .unwrap_or_else(|| "proofbattle/lean-sandbox:lean-4.21.0-rc3".to_string());
+
+        let reconnect_grace_ms = parse_u64(
+            map,
+            "RECONNECT_GRACE_WINDOW_MS",
+            10_000,
+            "integer milliseconds",
+        )?;
+        let reconnect_grace_window = Duration::from_millis(reconnect_grace_ms);
 
         let protocol_version = parse_u32(map, "PROTOCOL_VERSION", 1, "positive integer")?;
         let log_filter = map
@@ -115,8 +135,26 @@ impl Config {
             .cloned()
             .unwrap_or_else(|| "proof_battle_server=info".to_string());
 
+        let pb_env = map
+            .get("PB_ENV")
+            .or_else(|| map.get("ENVIRONMENT"))
+            .cloned()
+            .unwrap_or_else(|| "development".to_string());
+
+        if pb_env == "production" && database_url.is_none() {
+            return Err(ConfigError::InvalidValue {
+                var: "DATABASE_URL".to_string(),
+                val: "".to_string(),
+                expected: "DATABASE_URL is strictly required when PB_ENV=production",
+            });
+        }
+
+        if database_url.is_none() {
+            tracing::warn!("in-memory problem source: 3 problems, ELO disabled");
+        }
+
         if !sandbox_enabled {
-            eprintln!("WARN: SANDBOX DISABLED — LOCAL DEVELOPMENT ONLY");
+            tracing::warn!("SANDBOX DISABLED — LOCAL DEVELOPMENT ONLY");
         }
 
         Ok(Config {
@@ -138,6 +176,7 @@ impl Config {
             database_url,
             sandbox_enabled,
             sandbox_image,
+            reconnect_grace_window,
             protocol_version,
             log_filter,
         })
@@ -237,7 +276,10 @@ mod tests {
         assert_eq!(config.rate_limit_window, Duration::from_secs(60));
         assert_eq!(config.database_url, None);
         assert!(!config.sandbox_enabled);
-        assert_eq!(config.sandbox_image, "proofbattle/lean-sandbox:lean-4.21.0-rc3");
+        assert_eq!(
+            config.sandbox_image,
+            "proofbattle/lean-sandbox:lean-4.21.0-rc3"
+        );
         assert_eq!(config.protocol_version, 1);
         assert_eq!(config.log_filter, "proof_battle_server=info");
     }
@@ -248,7 +290,10 @@ mod tests {
         env.insert("BIND_ADDR".to_string(), "127.0.0.1:8080".to_string());
         env.insert("LEAN_TIMEOUT".to_string(), "45".to_string());
         env.insert("SANDBOX_ENABLED".to_string(), "true".to_string());
-        env.insert("DATABASE_URL".to_string(), "postgres://user:pass@localhost:5432/db".to_string());
+        env.insert(
+            "DATABASE_URL".to_string(),
+            "postgres://user:pass@localhost:5432/db".to_string(),
+        );
 
         let config = Config::from_map(&env).expect("overridden config should parse cleanly");
         assert_eq!(config.bind_addr, "127.0.0.1:8080");
@@ -309,6 +354,17 @@ mod tests {
         assert_eq!(
             Config::from_map(&env).unwrap_err().to_string(),
             "invalid value for SANDBOX_ENABLED: \"invalid_bool\" (expected boolean (true/false/1/0))"
+        );
+    }
+
+    #[test]
+    fn test_production_database_url_requirement() {
+        let mut env = HashMap::new();
+        env.insert("PB_ENV".to_string(), "production".to_string());
+        let err = Config::from_map(&env).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("DATABASE_URL is strictly required")
         );
     }
 }

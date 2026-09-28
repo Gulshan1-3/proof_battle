@@ -1,0 +1,11 @@
+{
+  "id": "dos_huge_term",
+  "category": "dos",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "simp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\n",
+  "expect": "reject",
+  "reject_reason": "TooLarge"
+}

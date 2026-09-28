@@ -1,0 +1,11 @@
+{
+  "id": "limit_too_many_lines",
+  "category": "limit",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "simp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\nsimp\n",
+  "expect": "reject",
+  "reject_reason": "TooLarge"
+}

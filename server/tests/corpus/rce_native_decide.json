@@ -1,0 +1,11 @@
+{
+  "id": "rce_native_decide",
+  "category": "rce",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "exact (by native_decide)",
+  "expect": "reject",
+  "reject_reason": "RejectedByFilter"
+}

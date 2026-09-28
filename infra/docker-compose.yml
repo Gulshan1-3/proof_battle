@@ -1,4 +1,22 @@
-# ProofBattle Infrastructure
-# Will be configured in stage S9
 version: '3.8'
-services: {}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-proofbattle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-proofbattle_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-proofbattle}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-proofbattle} -d ${POSTGRES_DB:-proofbattle}"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:

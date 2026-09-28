@@ -1,0 +1,11 @@
+{
+  "id": "dos_decide_hard",
+  "category": "dos",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "decide",
+  "expect": "reject",
+  "reject_reason": "LeaningFailed"
+}

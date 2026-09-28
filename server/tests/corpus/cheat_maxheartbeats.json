@@ -1,0 +1,11 @@
+{
+  "id": "cheat_maxheartbeats",
+  "category": "dos",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "set_option maxHeartbeats 100000000 in simp",
+  "expect": "reject",
+  "reject_reason": "RejectedByFilter"
+}

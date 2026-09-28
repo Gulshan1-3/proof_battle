@@ -1,0 +1,11 @@
+{
+  "id": "rce_extern",
+  "category": "rce",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "unsafe @[extern \"lean_io_prim_env\"]",
+  "expect": "reject",
+  "reject_reason": "RejectedByFilter"
+}

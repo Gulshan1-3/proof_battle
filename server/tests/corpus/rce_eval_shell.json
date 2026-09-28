@@ -1,0 +1,11 @@
+{
+  "id": "rce_eval_shell",
+  "category": "rce",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "#eval System.Platform.isOSWindows",
+  "expect": "reject",
+  "reject_reason": "RejectedByFilter"
+}

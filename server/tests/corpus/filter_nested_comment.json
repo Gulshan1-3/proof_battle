@@ -1,0 +1,11 @@
+{
+  "id": "filter_nested_comment",
+  "category": "filter",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "/- outer /- #eval -/ still comment -/\nintro n\nsimp",
+  "expect": "accept",
+  "reject_reason": null
+}

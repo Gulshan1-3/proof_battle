@@ -1,0 +1,11 @@
+{
+  "id": "cheat_statement_swap",
+  "category": "cheat",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "theorem goal : True := trivial",
+  "expect": "reject",
+  "reject_reason": "RejectedByFilter"
+}

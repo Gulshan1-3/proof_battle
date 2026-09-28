@@ -1,0 +1,11 @@
+{
+  "id": "happy_add_comm",
+  "category": "happy",
+  "goal": "∀ a b : ℕ, a + b = b + a",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "intro a b\nsimp [Nat.add_comm]",
+  "expect": "accept",
+  "reject_reason": null
+}

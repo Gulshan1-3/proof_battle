@@ -1,0 +1,22 @@
+services:
+  judge:
+    build:
+      context: ../..
+      dockerfile: infra/sandbox/Dockerfile
+    image: proofbattle/lean-sandbox:lean-4.21.0-rc3
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=seccomp.json
+    pids_limit: 256
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2048M
+    user: "10001:10001"

@@ -1,6 +1,5 @@
 pub fn preprocess(code: &str) -> String {
-    code
-        .replace(">=", "≥")
+    code.replace(">=", "≥")
         .replace("<=", "≤")
         .replace("->", "→")
         .replace("=>", "⇒")

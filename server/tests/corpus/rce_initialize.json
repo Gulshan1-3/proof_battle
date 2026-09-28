@@ -1,0 +1,11 @@
+{
+  "id": "rce_initialize",
+  "category": "rce",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "initialize registerBuiltinAttribute 1",
+  "expect": "reject",
+  "reject_reason": "RejectedByFilter"
+}

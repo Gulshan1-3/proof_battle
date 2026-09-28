@@ -1,0 +1,11 @@
+{
+  "id": "happy_induction",
+  "category": "happy",
+  "goal": "∀ n : ℕ, 0 + n = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "intro n\ninduction n\n· rfl\n· simp [*]",
+  "expect": "accept",
+  "reject_reason": null
+}

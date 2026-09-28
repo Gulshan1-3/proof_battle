@@ -1,0 +1,11 @@
+{
+  "id": "rce_macro_elab",
+  "category": "rce",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "macro_rules | `(x) => (IO.println \"x\")",
+  "expect": "reject",
+  "reject_reason": "RejectedByFilter"
+}

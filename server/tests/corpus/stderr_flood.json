@@ -1,0 +1,11 @@
+{
+  "id": "stderr_flood",
+  "category": "dos",
+  "goal": "∀ n : ℕ, n + 0 = n",
+  "imports": [
+    "import Mathlib.Data.Nat.Basic"
+  ],
+  "body": "simp",
+  "expect": "accept",
+  "reject_reason": null
+}
