@@ -38,17 +38,15 @@ frontend/dist/
 .vite/
 frontend/.vite/
 
-# === Lean Build Artifacts & Ephemeral Files ===
+# === Lean Environment, Mathlib & Ephemeral Files ===
+lean/
+*/lean/
 *.olean
 *.ilean
 .lake/
 **/.lake/
-lean/.lake/
-battle/.lake/
 proofs/
 **/proofs/
-lean/proofs/
-battle/proofs/
 
 # === Local Environment Configuration ===
 .env
