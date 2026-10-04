@@ -212,6 +212,24 @@ const FORBIDDEN_ANYWHERE_TOKENS: &[&str] = &[
     "native_decide",
     "unsafe",
     "extern",
+    "set_option",
+    "import",
+    "axiom",
+    "opaque",
+    "def",
+    "abbrev",
+    "theorem",
+    "lemma",
+    "macro",
+    "macro_rules",
+    "elab",
+    "elab_rules",
+    "syntax",
+    "notation",
+    "initialize",
+    "run_cmd",
+    "attribute",
+    "instance",
     "#eval",
     "#check",
     "#print",
@@ -565,7 +583,18 @@ fn validate_forbidden_tokens(stripped: &str) -> Result<(), FilterError> {
                 }
 
                 for &forbidden in FORBIDDEN_ANYWHERE_TOKENS {
-                    if token_str == forbidden || token_str.starts_with(forbidden) {
+                    let matches = if forbidden.starts_with('#') {
+                        token_str == forbidden || token_str.starts_with(forbidden)
+                    } else if forbidden.contains('.') {
+                        token_str == forbidden
+                            || token_str
+                                .strip_suffix(forbidden)
+                                .is_some_and(|prefix| prefix.ends_with('.'))
+                    } else {
+                        token_str == forbidden || token_str.split('.').any(|part| part == forbidden)
+                    };
+
+                    if matches {
                         return Err(FilterError::ForbiddenToken {
                             token: token_str,
                             line: line_num,
@@ -624,6 +653,8 @@ mod tests {
             "obtain ⟨x, hx⟩ := h",
             "intro a b\nomega",
             "intro P Q ⟨hp, hq⟩\nexact ⟨hq, hp⟩",
+            "exact Nat.default",
+            "exact definition",
         ];
 
         for code in cases {
@@ -643,6 +674,15 @@ mod tests {
         let cases = [
             ("import Mathlib", "import"),
             ("set_option maxHeartbeats 1 in simp", "set_option"),
+            (
+                "exact (by set_option warningAsError false in trivial)",
+                "set_option",
+            ),
+            (
+                "have h : True := by set_option warningAsError false in exact trivial",
+                "set_option",
+            ),
+            ("exact (by def foo := 1)", "def"),
             ("exact unsafe 1", "unsafe"),
             ("native_decide", "native_decide"),
             ("axiom h : False", "axiom"),

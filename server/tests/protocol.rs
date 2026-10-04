@@ -158,18 +158,23 @@ async fn test_submit_proof_accepted_and_answered() {
     }
     assert!(p1_got_verdict && p1_got_round_end);
 
-    // Player 2 receives RoundEnd
-    let m2 = ws2.next().await.expect("next").expect("msg");
-    let parsed2: ServerMessage = serde_json::from_str(m2.to_text().expect("text")).unwrap();
-    match parsed2 {
-        ServerMessage::RoundEnd {
-            outcome, winner_id, ..
-        } => {
-            assert_eq!(outcome, MatchOutcome::Won);
-            assert_eq!(winner_id, Some(p1_id));
+    // Player 2 receives OpponentActivity and RoundEnd
+    let mut p2_got_round_end = false;
+    for _ in 0..2 {
+        let m2 = ws2.next().await.expect("next").expect("msg");
+        let parsed2: ServerMessage = serde_json::from_str(m2.to_text().expect("text")).unwrap();
+        match parsed2 {
+            ServerMessage::OpponentActivity { status } => {
+                assert_eq!(status, OpponentStatus::Verifying);
+            }
+            ServerMessage::RoundEnd { winner_id, .. } => {
+                assert_eq!(winner_id, Some(p1_id.clone()));
+                p2_got_round_end = true;
+            }
+            other => panic!("expected OpponentActivity or RoundEnd, got {other:?}"),
         }
-        other => panic!("expected RoundEnd, got {other:?}"),
     }
+    assert!(p2_got_round_end);
 }
 
 #[tokio::test]
@@ -305,5 +310,43 @@ async fn test_malformed_garbage_bytes_rejected() {
             assert!(message.contains("1003") || message.contains("unsupported"));
         }
         other => panic!("expected ServerError for binary frame, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_handshake_timeout_terminates_idle_connection() {
+    let mut env = HashMap::new();
+    env.insert("LEAN_TIMEOUT".to_string(), "15".to_string());
+    env.insert("SANDBOX_ENABLED".to_string(), "false".to_string());
+    env.insert("HANDSHAKE_TIMEOUT_MS".to_string(), "150".to_string());
+
+    let config = Arc::new(Config::from_map(&env).expect("valid config"));
+    let app = create_app(config.clone());
+
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind ephemeral port");
+    let addr = listener.local_addr().expect("local addr");
+    let ws_url = format!("ws://127.0.0.1:{}/ws", addr.port());
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let (mut ws, _) = connect_async(&ws_url).await.expect("connect");
+
+    // Do not send Hello; wait for server-enforced handshake timeout
+    let msg = tokio::time::timeout(std::time::Duration::from_millis(2000), ws.next())
+        .await
+        .expect("handshake timeout must trigger within 2s")
+        .expect("next")
+        .expect("msg");
+
+    let parsed: ServerMessage = serde_json::from_str(msg.to_text().expect("text")).unwrap();
+    match parsed {
+        ServerMessage::ServerError { code, .. } => {
+            assert_eq!(code, "handshake_timeout");
+        }
+        other => panic!("expected handshake_timeout, got {other:?}"),
     }
 }

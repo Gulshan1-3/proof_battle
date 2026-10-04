@@ -46,6 +46,17 @@ pub enum ClientMessage {
     Pong {
         ts: i64,
     },
+    CreatePrivateRoom {
+        category: Option<String>,
+        difficulty: Option<u8>,
+        duration_secs: Option<i64>,
+    },
+    JoinPrivateRoom {
+        room_code: String,
+    },
+    SpectateRoom {
+        room_code: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -95,6 +106,20 @@ pub enum RejectReason {
     RejectedByFilter(String),
     Busy,
     Internal(String),
+}
+
+impl RejectReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RejectReason::LeaningFailed => "LeaningFailed",
+            RejectReason::TimedOut => "TimedOut",
+            RejectReason::UsesSorry => "UsesSorry",
+            RejectReason::TooLarge => "TooLarge",
+            RejectReason::RejectedByFilter(_) => "RejectedByFilter",
+            RejectReason::Busy => "Busy",
+            RejectReason::Internal(_) => "Internal",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -204,6 +229,32 @@ pub enum ServerMessage {
     },
     Pong {
         ts: i64,
+    },
+    PrivateRoomCreated {
+        room_code: String,
+        category: Option<String>,
+        difficulty: Option<u8>,
+        duration_secs: Option<i64>,
+    },
+    PrivateRoomWaiting {
+        room_code: String,
+        host_username: Option<String>,
+    },
+    SpectatorJoined {
+        room_id: String,
+        room_code: Option<String>,
+        player1: PlayerInfo,
+        player2: PlayerInfo,
+        problem: Problem,
+        duration_ms: i64,
+        elapsed_ms: i64,
+        starts_at_ms: i64,
+        ends_at_ms: i64,
+    },
+    SpectatorUpdate {
+        room_id: String,
+        player_id: String,
+        status: OpponentStatus,
     },
 }
 

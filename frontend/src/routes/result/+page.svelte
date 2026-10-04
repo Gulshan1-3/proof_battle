@@ -176,8 +176,11 @@
 		</div>
 
 		<!-- Navigation / Rematch CTAs -->
-		<div class="flex items-center justify-center gap-3 border-t border-[var(--bg-border)] pt-4">
+		<div
+			class="flex flex-wrap items-center justify-center gap-3 border-t border-[var(--bg-border)] pt-4"
+		>
 			<Button variant="secondary" onclick={handlePractice}>Home Arena</Button>
+			<Button variant="secondary" onclick={() => goto('/history')}>Match History</Button>
 			<Button variant="secondary" onclick={handleRematch}>Rematch</Button>
 			<Button variant="primary" onclick={handleNewOpponent}>New Opponent</Button>
 		</div>

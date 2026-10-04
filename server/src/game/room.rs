@@ -6,8 +6,10 @@ use crate::challenges::ProofChallenge;
 use crate::config::Config;
 use crate::message::ServerMessage;
 use crate::ws::message::{
-    Diagnostic, DiagnosticSeverity, MatchOutcome, RejectReason, VerdictStatus,
+    Diagnostic, DiagnosticSeverity, MatchOutcome, OpponentStatus, PlayerInfo, Problem,
+    RejectReason, VerdictStatus,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
@@ -38,6 +40,13 @@ pub enum RoomCommand {
         req_id: Option<String>,
         outcome: Result<crate::lean::VerifyOutcome, RejectReason>,
     },
+    AddSpectator {
+        spectator_id: PlayerId,
+        tx: mpsc::Sender<ServerMessage>,
+    },
+    RemoveSpectator {
+        spectator_id: PlayerId,
+    },
 }
 
 struct RoomGuard {
@@ -64,6 +73,8 @@ pub struct Room {
     pub tx2: mpsc::Sender<ServerMessage>,
     pub p1_rating: Rating,
     pub p2_rating: Rating,
+    pub p1_info: PlayerInfo,
+    pub p2_info: PlayerInfo,
     pub p1_disconnected_at: Option<Instant>,
     pub p2_disconnected_at: Option<Instant>,
     pub challenge: ProofChallenge,
@@ -71,6 +82,11 @@ pub struct Room {
     pub starts_at: Instant,
     pub deadline: Instant,
     pub duration: Duration,
+    pub round_start_unix_ms: i64,
+    pub round_end_unix_ms: i64,
+    pub is_unrated: bool,
+    pub room_code: Option<String>,
+    pub spectators: HashMap<PlayerId, mpsc::Sender<ServerMessage>>,
     pub submission_count1: u32,
     pub submission_count2: u32,
     pub in_flight1: bool,
@@ -79,6 +95,7 @@ pub struct Room {
     pub config: Arc<Config>,
     pub pool: Arc<VerifierPool>,
     pub rating_system: Arc<dyn RatingSystem>,
+    pub history_store: Arc<crate::game::history::HistoryStore>,
     pub matchmaker_tx: mpsc::Sender<MatchmakerCommand>,
     pub self_tx: mpsc::Sender<RoomCommand>,
     pub rx: mpsc::Receiver<RoomCommand>,
@@ -94,18 +111,30 @@ impl Room {
         tx2: mpsc::Sender<ServerMessage>,
         p1_rating: Rating,
         p2_rating: Rating,
+        p1_info: PlayerInfo,
+        p2_info: PlayerInfo,
         challenge: ProofChallenge,
         problem_id: Option<uuid::Uuid>,
         duration: Duration,
+        is_unrated: bool,
+        room_code: Option<String>,
         config: Arc<Config>,
         pool: Arc<VerifierPool>,
         rating_system: Arc<dyn RatingSystem>,
+        history_store: Arc<crate::game::history::HistoryStore>,
         matchmaker_tx: mpsc::Sender<MatchmakerCommand>,
         rx: mpsc::Receiver<RoomCommand>,
         self_tx: mpsc::Sender<RoomCommand>,
     ) {
         let now = Instant::now();
         let deadline = now + duration;
+        let now_unix_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        let duration_ms = duration.as_millis() as i64;
+        let round_end_unix_ms = now_unix_ms + duration_ms;
+
         let room = Self {
             room_id,
             player1,
@@ -114,6 +143,8 @@ impl Room {
             tx2,
             p1_rating,
             p2_rating,
+            p1_info,
+            p2_info,
             p1_disconnected_at: None,
             p2_disconnected_at: None,
             challenge,
@@ -121,6 +152,11 @@ impl Room {
             starts_at: now,
             deadline,
             duration,
+            round_start_unix_ms: now_unix_ms,
+            round_end_unix_ms,
+            is_unrated,
+            room_code,
+            spectators: HashMap::new(),
             submission_count1: 0,
             submission_count2: 0,
             in_flight1: false,
@@ -129,6 +165,7 @@ impl Room {
             config,
             pool,
             rating_system,
+            history_store,
             matchmaker_tx,
             self_tx,
             rx,
@@ -203,6 +240,37 @@ impl Room {
                         Some(RoomCommand::Ping { player_id }) => {
                             let tx = if player_id == self.player1 { &self.tx1 } else { &self.tx2 };
                             let _ = tx.send(ServerMessage::Pong { ts: 0 }).await;
+                        }
+                        Some(RoomCommand::AddSpectator { spectator_id, tx }) => {
+                            let now = Instant::now();
+                            let elapsed_ms = now.duration_since(self.starts_at).as_millis() as i64;
+                            let duration_ms = self.duration.as_millis() as i64;
+                            let problem = Problem {
+                                id: format!("problem_{}", self.room_id),
+                                goal: self.challenge.goal.clone(),
+                                imports: self.challenge.imports.clone(),
+                                difficulty: 1,
+                                category: "logic".to_string(),
+                                hint: None,
+                                duration_ms,
+                            };
+                            let _ = tx
+                                .send(ServerMessage::SpectatorJoined {
+                                    room_id: self.room_id.to_string(),
+                                    room_code: self.room_code.clone(),
+                                    player1: self.p1_info.clone(),
+                                    player2: self.p2_info.clone(),
+                                    problem,
+                                    duration_ms,
+                                    elapsed_ms,
+                                    starts_at_ms: self.round_start_unix_ms,
+                                    ends_at_ms: self.round_end_unix_ms,
+                                })
+                                .await;
+                            self.spectators.insert(spectator_id, tx);
+                        }
+                        Some(RoomCommand::RemoveSpectator { spectator_id }) => {
+                            self.spectators.remove(&spectator_id);
                         }
                         None => {
                             tracing::debug!(room_id = %self.room_id, "room command channel closed");
@@ -321,6 +389,27 @@ impl Room {
             return;
         }
 
+        let other_tx = if player_id == self.player1 {
+            &self.tx2
+        } else {
+            &self.tx1
+        };
+        let _ = other_tx
+            .send(ServerMessage::OpponentActivity {
+                status: OpponentStatus::Verifying,
+            })
+            .await;
+
+        for spec_tx in self.spectators.values() {
+            let _ = spec_tx
+                .send(ServerMessage::SpectatorUpdate {
+                    room_id: self.room_id.to_string(),
+                    player_id: player_id.to_string(),
+                    status: OpponentStatus::Verifying,
+                })
+                .await;
+        }
+
         let internal_tx = self.self_tx.clone();
         let config = self.config.clone();
         let pool = self.pool.clone();
@@ -393,6 +482,21 @@ impl Room {
 
         let request_id = req_id.unwrap_or_else(|| "submission".to_string());
 
+        let (v_str, r_str, duration_secs) = match &result {
+            Ok(out) => {
+                let (v, r) = match &out.verdict {
+                    crate::lean::Verdict::Accepted { .. } => ("Accepted", None),
+                    crate::lean::Verdict::Rejected { reason, .. } => {
+                        ("Rejected", Some(reason.as_str()))
+                    }
+                    crate::lean::Verdict::Error(_) => ("Error", None),
+                };
+                (v, r, out.elapsed_ms as f64 / 1000.0)
+            }
+            Err(reject_reason) => ("Rejected", Some(reject_reason.as_str()), 0.0),
+        };
+        crate::metrics::get_metrics().record_verification(v_str, r_str, duration_secs);
+
         let outcome = match result {
             Ok(out) => out,
             Err(reject_reason) => {
@@ -431,20 +535,48 @@ impl Room {
                     let elapsed = Instant::now().duration_since(self.starts_at);
 
                     // Compute dynamic Elo update
-                    let mut p1_r = self.p1_rating;
-                    let mut p2_r = self.p2_rating;
-                    let a_score = if winner == self.player1 { 1.0 } else { 0.0 };
-                    let (delta1, delta2) = self.rating_system.update(&mut p1_r, &mut p2_r, a_score);
-
-                    let p1_delta = delta1;
-                    let p2_delta = delta2;
+                    let (p1_delta, p2_delta) = if self.is_unrated {
+                        (0, 0)
+                    } else {
+                        let mut p1_r = self.p1_rating;
+                        let mut p2_r = self.p2_rating;
+                        let a_score = if winner == self.player1 { 1.0 } else { 0.0 };
+                        let (delta1, delta2) =
+                            self.rating_system.update(&mut p1_r, &mut p2_r, a_score);
+                        let _ = self
+                            .matchmaker_tx
+                            .send(MatchmakerCommand::SetPlayerRating {
+                                player_id: self.player1,
+                                rating: p1_r,
+                            })
+                            .await;
+                        let _ = self
+                            .matchmaker_tx
+                            .send(MatchmakerCommand::SetPlayerRating {
+                                player_id: self.player2,
+                                rating: p2_r,
+                            })
+                            .await;
+                        (delta1, delta2)
+                    };
 
                     let duration_ms = elapsed.as_millis() as i64;
+
+                    let p1_outcome = if winner == self.player1 {
+                        MatchOutcome::Won
+                    } else {
+                        MatchOutcome::Lost
+                    };
+                    let p2_outcome = if winner == self.player2 {
+                        MatchOutcome::Won
+                    } else {
+                        MatchOutcome::Lost
+                    };
 
                     // Send RoundEnd to both players
                     let round_end_p1 = ServerMessage::RoundEnd {
                         room_id: self.room_id.to_string(),
-                        outcome: MatchOutcome::Won,
+                        outcome: p1_outcome,
                         winner_id: Some(winner.to_string()),
                         winning_proof: Some(stdout.clone()),
                         canonical_proof: None,
@@ -454,17 +586,61 @@ impl Room {
                     };
                     let round_end_p2 = ServerMessage::RoundEnd {
                         room_id: self.room_id.to_string(),
-                        outcome: MatchOutcome::Won,
+                        outcome: p2_outcome,
                         winner_id: Some(winner.to_string()),
-                        winning_proof: Some(stdout),
+                        winning_proof: Some(stdout.clone()),
                         canonical_proof: None,
                         elo_delta: p2_delta,
+                        duration_ms,
+                        seq: 1,
+                    };
+                    let round_end_spec = ServerMessage::RoundEnd {
+                        room_id: self.room_id.to_string(),
+                        outcome: MatchOutcome::Won,
+                        winner_id: Some(winner.to_string()),
+                        winning_proof: Some(stdout.clone()),
+                        canonical_proof: None,
+                        elo_delta: 0,
                         duration_ms,
                         seq: 1,
                     };
 
                     let _ = self.tx1.send(round_end_p1).await;
                     let _ = self.tx2.send(round_end_p2).await;
+                    for spec_tx in self.spectators.values() {
+                        let _ = spec_tx.send(round_end_spec.clone()).await;
+                    }
+
+                    let match_record = crate::game::history::MatchRecord {
+                        id: uuid::Uuid::new_v4(),
+                        room_id: self.room_id.0,
+                        player1_id: self.player1.0,
+                        player1_username: self.p1_info.username.clone(),
+                        player1_elo_before: self.p1_rating.elo,
+                        player1_elo_after: self.p1_rating.elo + p1_delta,
+                        elo_delta_p1: p1_delta,
+                        player2_id: self.player2.0,
+                        player2_username: self.p2_info.username.clone(),
+                        player2_elo_before: self.p2_rating.elo,
+                        player2_elo_after: self.p2_rating.elo + p2_delta,
+                        elo_delta_p2: p2_delta,
+                        problem_id: self.problem_id,
+                        problem_goal: self.challenge.goal.clone(),
+                        problem_category: "logic".to_string(),
+                        problem_difficulty: 1,
+                        winner_id: Some(winner.0),
+                        outcome: if winner == self.player1 {
+                            "Won".to_string()
+                        } else {
+                            "Lost".to_string()
+                        },
+                        winning_proof: Some(stdout),
+                        canonical_proof: None,
+                        rated: !self.is_unrated,
+                        duration_ms,
+                        created_at: chrono::Utc::now(),
+                    };
+                    self.history_store.record_match(match_record).await;
 
                     return true;
                 }
@@ -529,7 +705,7 @@ impl Room {
         let duration_ms = elapsed.as_millis() as i64;
 
         // ADR-010: If forfeit occurred within the first 30 seconds, match is flagged unrated (rated = false, elo_delta = 0)
-        let is_unrated = elapsed < Duration::from_secs(30);
+        let is_unrated = self.is_unrated || elapsed < Duration::from_secs(30);
 
         let (p1_delta, p2_delta) = if is_unrated {
             (0, 0)
@@ -537,12 +713,33 @@ impl Room {
             let mut p1_r = self.p1_rating;
             let mut p2_r = self.p2_rating;
             let a_score = if winner == self.player1 { 1.0 } else { 0.0 };
-            self.rating_system.update(&mut p1_r, &mut p2_r, a_score)
+            let (d1, d2) = self.rating_system.update(&mut p1_r, &mut p2_r, a_score);
+            let _ = self
+                .matchmaker_tx
+                .send(MatchmakerCommand::SetPlayerRating {
+                    player_id: self.player1,
+                    rating: p1_r,
+                })
+                .await;
+            let _ = self
+                .matchmaker_tx
+                .send(MatchmakerCommand::SetPlayerRating {
+                    player_id: self.player2,
+                    rating: p2_r,
+                })
+                .await;
+            (d1, d2)
+        };
+
+        let (p1_outcome, p2_outcome) = if winner == self.player1 {
+            (MatchOutcome::ForfeitWin, MatchOutcome::ForfeitLoss)
+        } else {
+            (MatchOutcome::ForfeitLoss, MatchOutcome::ForfeitWin)
         };
 
         let round_end_p1 = ServerMessage::RoundEnd {
             room_id: self.room_id.to_string(),
-            outcome: MatchOutcome::ForfeitWin,
+            outcome: p1_outcome,
             winner_id: Some(winner.to_string()),
             winning_proof: None,
             canonical_proof: None,
@@ -553,7 +750,7 @@ impl Room {
 
         let round_end_p2 = ServerMessage::RoundEnd {
             room_id: self.room_id.to_string(),
-            outcome: MatchOutcome::ForfeitWin,
+            outcome: p2_outcome,
             winner_id: Some(winner.to_string()),
             winning_proof: None,
             canonical_proof: None,
@@ -562,8 +759,53 @@ impl Room {
             seq: 1,
         };
 
+        let round_end_spec = ServerMessage::RoundEnd {
+            room_id: self.room_id.to_string(),
+            outcome: MatchOutcome::ForfeitWin,
+            winner_id: Some(winner.to_string()),
+            winning_proof: None,
+            canonical_proof: None,
+            elo_delta: 0,
+            duration_ms,
+            seq: 1,
+        };
+
         let _ = self.tx1.send(round_end_p1).await;
         let _ = self.tx2.send(round_end_p2).await;
+        for spec_tx in self.spectators.values() {
+            let _ = spec_tx.send(round_end_spec.clone()).await;
+        }
+
+        let match_record = crate::game::history::MatchRecord {
+            id: uuid::Uuid::new_v4(),
+            room_id: self.room_id.0,
+            player1_id: self.player1.0,
+            player1_username: self.p1_info.username.clone(),
+            player1_elo_before: self.p1_rating.elo,
+            player1_elo_after: self.p1_rating.elo + p1_delta,
+            elo_delta_p1: p1_delta,
+            player2_id: self.player2.0,
+            player2_username: self.p2_info.username.clone(),
+            player2_elo_before: self.p2_rating.elo,
+            player2_elo_after: self.p2_rating.elo + p2_delta,
+            elo_delta_p2: p2_delta,
+            problem_id: self.problem_id,
+            problem_goal: self.challenge.goal.clone(),
+            problem_category: "logic".to_string(),
+            problem_difficulty: 1,
+            winner_id: Some(winner.0),
+            outcome: if winner == self.player1 {
+                "ForfeitWin".to_string()
+            } else {
+                "ForfeitLoss".to_string()
+            },
+            winning_proof: None,
+            canonical_proof: None,
+            rated: !is_unrated,
+            duration_ms,
+            created_at: chrono::Utc::now(),
+        };
+        self.history_store.record_match(match_record).await;
     }
 
     async fn handle_disconnect(&mut self, player_id: PlayerId) {
@@ -586,9 +828,28 @@ impl Room {
         let duration_ms = self.duration.as_millis() as i64;
 
         // Draw update in Elo
-        let mut p1_r = self.p1_rating;
-        let mut p2_r = self.p2_rating;
-        let (delta1, delta2) = self.rating_system.update(&mut p1_r, &mut p2_r, 0.5);
+        let (delta1, delta2) = if self.is_unrated {
+            (0, 0)
+        } else {
+            let mut p1_r = self.p1_rating;
+            let mut p2_r = self.p2_rating;
+            let (d1, d2) = self.rating_system.update(&mut p1_r, &mut p2_r, 0.5);
+            let _ = self
+                .matchmaker_tx
+                .send(MatchmakerCommand::SetPlayerRating {
+                    player_id: self.player1,
+                    rating: p1_r,
+                })
+                .await;
+            let _ = self
+                .matchmaker_tx
+                .send(MatchmakerCommand::SetPlayerRating {
+                    player_id: self.player2,
+                    rating: p2_r,
+                })
+                .await;
+            (d1, d2)
+        };
 
         let round_end_p1 = ServerMessage::RoundEnd {
             room_id: self.room_id.to_string(),
@@ -612,7 +873,48 @@ impl Room {
             seq: 1,
         };
 
+        let round_end_spec = ServerMessage::RoundEnd {
+            room_id: self.room_id.to_string(),
+            outcome: MatchOutcome::Draw,
+            winner_id: None,
+            winning_proof: None,
+            canonical_proof: None,
+            elo_delta: 0,
+            duration_ms,
+            seq: 1,
+        };
+
         let _ = self.tx1.send(round_end_p1).await;
         let _ = self.tx2.send(round_end_p2).await;
+        for spec_tx in self.spectators.values() {
+            let _ = spec_tx.send(round_end_spec.clone()).await;
+        }
+
+        let match_record = crate::game::history::MatchRecord {
+            id: uuid::Uuid::new_v4(),
+            room_id: self.room_id.0,
+            player1_id: self.player1.0,
+            player1_username: self.p1_info.username.clone(),
+            player1_elo_before: self.p1_rating.elo,
+            player1_elo_after: self.p1_rating.elo + delta1,
+            elo_delta_p1: delta1,
+            player2_id: self.player2.0,
+            player2_username: self.p2_info.username.clone(),
+            player2_elo_before: self.p2_rating.elo,
+            player2_elo_after: self.p2_rating.elo + delta2,
+            elo_delta_p2: delta2,
+            problem_id: self.problem_id,
+            problem_goal: self.challenge.goal.clone(),
+            problem_category: "logic".to_string(),
+            problem_difficulty: 1,
+            winner_id: None,
+            outcome: "Draw".to_string(),
+            winning_proof: None,
+            canonical_proof: None,
+            rated: !self.is_unrated,
+            duration_ms,
+            created_at: chrono::Utc::now(),
+        };
+        self.history_store.record_match(match_record).await;
     }
 }

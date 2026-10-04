@@ -1,4 +1,5 @@
 pub mod elo;
+pub mod history;
 pub mod matchmaker;
 pub mod queue;
 pub mod room;

@@ -17,7 +17,7 @@ pub enum Verdict {
         reason: RejectReason,
         stderr: String,
     },
-    Error(String), // harness/spawn failure — NEVER treated as Accepted
+    Error(String), // harness/spawn failure, NEVER treated as Accepted
 }
 
 pub use crate::ws::message::RejectReason;
@@ -362,7 +362,7 @@ mod tests {
         let config = test_config();
         let imports = vec!["import Mathlib.Data.Nat.Basic".to_string()];
 
-        // The filter now catches sorry before it reaches Lean — wrap_problem rejects it
+        // The filter now catches sorry before it reaches Lean: wrap_problem rejects it
         let result = wrap_problem(&imports, "∀ n : ℕ, n + 0 = n", "  sorry\n", &config);
         assert!(
             matches!(result, Err(RejectReason::RejectedByFilter(_))),
@@ -371,7 +371,7 @@ mod tests {
         );
 
         // Also verify that parse_verdict correctly detects sorry in Lean output
-        // (belt and suspenders — the preamble's warningAsError catches it at Lean level too)
+        // (belt and suspenders: the preamble's warningAsError catches it at Lean level too)
         let (verdict, _) = parse_verdict(1, "", "error: declaration uses 'sorry'");
         assert!(
             matches!(

@@ -15,7 +15,7 @@
 </script>
 
 <svelte:head>
-	<title>ProofBattle — Competitive Lean Theorem Proving</title>
+	<title>ProofBattle: Competitive Lean Theorem Proving</title>
 	<link rel="icon" href={favicon} />
 </svelte:head>
 

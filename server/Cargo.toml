@@ -15,10 +15,11 @@ rand = "0.9.1"
 rand_chacha = "0.9.0"
 rand_core = "0.9.3"
 tracing = { version = "0.1", default-features = false }
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 ts-rs = { version = "10", features = ["serde-compat", "uuid-impl"] }
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "uuid", "chrono", "macros", "migrate"] }
 async-trait = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
+tokio-tungstenite = "0.24"
 
 [dev-dependencies]
-tokio-tungstenite = "0.24"

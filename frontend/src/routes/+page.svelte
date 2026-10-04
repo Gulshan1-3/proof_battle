@@ -43,6 +43,14 @@
 			typeof sessionStorage !== 'undefined' && sessionStorage.getItem('proofbattle.mock') === '1';
 		goto('/lobby?practice=1' + (isMock ? '&mock=1' : ''));
 	}
+
+	function handlePrivateDuel() {
+		localStorage.setItem('proofbattle.username', username);
+		game.username = username;
+		const isMock =
+			typeof sessionStorage !== 'undefined' && sessionStorage.getItem('proofbattle.mock') === '1';
+		goto('/lobby?private=1' + (isMock ? '&mock=1' : ''));
+	}
 </script>
 
 <div class="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-between p-6">
@@ -63,6 +71,12 @@
 		</div>
 
 		<div class="flex items-center gap-3">
+			<a
+				href="/history"
+				class="rounded-[var(--radius-md)] border border-[var(--bg-border)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition-colors hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+			>
+				Match History
+			</a>
 			<Badge variant="accent">Season 1</Badge>
 			<div class="font-mono text-xs text-[var(--text-secondary)]">
 				Rating: <strong class="text-[var(--text-primary)]">{game.elo}</strong>
@@ -113,7 +127,7 @@
 				</div>
 			</div>
 
-			<div class="grid grid-cols-2 gap-3 pt-2">
+			<div class="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-3">
 				<Button variant="primary" size="lg" onclick={handlePlayNow} class="w-full">
 					<svg
 						width="18"
@@ -126,6 +140,9 @@
 						<polygon points="5 3 19 12 5 21 5 3"></polygon>
 					</svg>
 					Play Ranked
+				</Button>
+				<Button variant="secondary" size="lg" onclick={handlePrivateDuel} class="w-full">
+					Private Duel
 				</Button>
 				<Button variant="secondary" size="lg" onclick={handlePractice} class="w-full">
 					Practice Solo

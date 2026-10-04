@@ -33,6 +33,26 @@ fn test_client_messages_serialise_with_type_discriminator_and_roundtrip() {
         ),
         (ClientMessage::Resign {}, "Resign"),
         (ClientMessage::Pong { ts: 1700000000000 }, "Pong"),
+        (
+            ClientMessage::CreatePrivateRoom {
+                category: Some("logic".to_string()),
+                difficulty: Some(2),
+                duration_secs: Some(300),
+            },
+            "CreatePrivateRoom",
+        ),
+        (
+            ClientMessage::JoinPrivateRoom {
+                room_code: "MATH42".to_string(),
+            },
+            "JoinPrivateRoom",
+        ),
+        (
+            ClientMessage::SpectateRoom {
+                room_code: "MATH42".to_string(),
+            },
+            "SpectateRoom",
+        ),
     ];
 
     for (msg, expected_type) in cases {
@@ -180,6 +200,60 @@ fn test_server_messages_serialise_with_type_discriminator_and_roundtrip() {
             "ServerError",
         ),
         (ServerMessage::Pong { ts: 1700000000000 }, "Pong"),
+        (
+            ServerMessage::PrivateRoomCreated {
+                room_code: "MATH42".to_string(),
+                category: Some("logic".to_string()),
+                difficulty: Some(2),
+                duration_secs: Some(300),
+            },
+            "PrivateRoomCreated",
+        ),
+        (
+            ServerMessage::PrivateRoomWaiting {
+                room_code: "MATH42".to_string(),
+                host_username: Some("alice".to_string()),
+            },
+            "PrivateRoomWaiting",
+        ),
+        (
+            ServerMessage::SpectatorJoined {
+                room_id: "room_1".to_string(),
+                room_code: Some("MATH42".to_string()),
+                player1: PlayerInfo {
+                    player_id: "p1".to_string(),
+                    username: Some("alice".to_string()),
+                    elo: 1200,
+                },
+                player2: PlayerInfo {
+                    player_id: "p2".to_string(),
+                    username: Some("bob".to_string()),
+                    elo: 1250,
+                },
+                problem: Problem {
+                    id: "p1".to_string(),
+                    goal: "∀ n : ℕ, n + 0 = n".to_string(),
+                    imports: vec![],
+                    difficulty: 1,
+                    category: "logic".to_string(),
+                    hint: None,
+                    duration_ms: 300000,
+                },
+                duration_ms: 300000,
+                elapsed_ms: 15000,
+                starts_at_ms: 1000,
+                ends_at_ms: 301000,
+            },
+            "SpectatorJoined",
+        ),
+        (
+            ServerMessage::SpectatorUpdate {
+                room_id: "room_1".to_string(),
+                player_id: "p1".to_string(),
+                status: OpponentStatus::Verifying,
+            },
+            "SpectatorUpdate",
+        ),
     ];
 
     for (msg, expected_type) in cases {

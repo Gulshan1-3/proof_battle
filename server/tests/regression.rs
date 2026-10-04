@@ -128,7 +128,7 @@ async fn test_regression_sorry_rejected_game_continues() {
         other => panic!("Expected Verdict, got {other:?}"),
     }
 
-    // Now Player 1 submits legitimate proof — game must CONTINUE and accept it
+    // Now Player 1 submits legitimate proof: game must CONTINUE and accept it
     let correct_code = solve_challenge(&current_goal);
     let submit_good = ClientMessage::ProofRequest {
         req_id: "good_req".to_string(),
@@ -201,15 +201,26 @@ async fn test_regression_valid_proof_ends_round_for_both() {
         }
     ));
 
-    let p2_end = ws2.next().await.unwrap().unwrap();
-    let p2_end_parsed: ServerMessage = serde_json::from_str(p2_end.to_text().unwrap()).unwrap();
-    assert!(matches!(
-        p2_end_parsed,
-        ServerMessage::RoundEnd {
-            outcome: MatchOutcome::Won,
-            ..
+    let mut p2_got_round_end = false;
+    for _ in 0..2 {
+        let p2_msg = ws2.next().await.unwrap().unwrap();
+        let p2_parsed: ServerMessage = serde_json::from_str(p2_msg.to_text().unwrap()).unwrap();
+        match p2_parsed {
+            ServerMessage::OpponentActivity { status } => {
+                assert_eq!(
+                    status,
+                    proof_battle_server::ws::message::OpponentStatus::Verifying
+                );
+            }
+            ServerMessage::RoundEnd { outcome, .. } => {
+                assert_eq!(outcome, MatchOutcome::Lost);
+                p2_got_round_end = true;
+                break;
+            }
+            other => panic!("expected OpponentActivity or RoundEnd, got {other:?}"),
         }
-    ));
+    }
+    assert!(p2_got_round_end);
 }
 
 /// 3. `#eval IO.println "x"` receives Verdict(Rejected) and the string "x" appears in no log line

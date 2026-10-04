@@ -69,6 +69,29 @@ async fn test_rate_limiter_1_check_per_2s() {
 }
 
 #[tokio::test]
+async fn test_rate_limiter_persists_across_reconnects_and_cleans_up() {
+    let limiter = RateLimiter::new();
+    let player = PlayerId::new();
+
+    // Saturate submissions
+    for _ in 0..5 {
+        assert!(limiter.check_submit(player).await.is_ok());
+    }
+    assert!(limiter.check_submit(player).await.is_err());
+
+    // Simulated reconnect: do not reset bucket, rate limit remains active
+    assert!(
+        limiter.check_submit(player).await.is_err(),
+        "Rate limit must persist across reconnection"
+    );
+
+    // Stale cleanup retains active throttled bucket
+    limiter.cleanup_stale().await;
+    let (submits, _) = limiter.bucket_count().await;
+    assert_eq!(submits, 1);
+}
+
+#[tokio::test]
 async fn test_lane_isolation_saturating_check_lane_does_not_block_submit_lane() {
     let config = make_test_config();
     // submit_capacity = 2, check_capacity = 1, acquire_timeout = 2s

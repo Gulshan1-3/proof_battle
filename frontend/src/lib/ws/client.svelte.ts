@@ -221,12 +221,67 @@ export class ProofBattleClient {
 					durationMs: msg.duration_ms,
 					seq: msg.seq
 				};
-				game.elo += msg.elo_delta;
+				if (!game.isSpectating) {
+					game.elo += msg.elo_delta;
+				}
 				break;
 			}
 
 			case 'ServerError': {
 				console.error(`[Server Error ${msg.code}]: ${msg.message}`);
+				game.serverError = { code: msg.code, message: msg.message };
+				if (this.state === 'matchmaking') {
+					this.transition('LEAVE_QUEUE');
+				}
+				break;
+			}
+
+			case 'PrivateRoomCreated': {
+				game.privateRoomCode = msg.room_code;
+				game.isPrivateRoomHost = true;
+				break;
+			}
+
+			case 'PrivateRoomWaiting': {
+				game.privateRoomCode = msg.room_code;
+				break;
+			}
+
+			case 'SpectatorJoined': {
+				this.transition('SPECTATE_JOINED');
+				game.isSpectating = true;
+				game.roomId = msg.room_id;
+				game.privateRoomCode = msg.room_code ?? null;
+				game.problem = msg.problem;
+				game.you = msg.player1;
+				game.opponent = msg.player2;
+				game.startsAtMs = Number(msg.starts_at_ms);
+				game.endsAtMs = Number(msg.ends_at_ms);
+				game.durationMs = Number(msg.duration_ms);
+				game.spectatorState = {
+					roomId: msg.room_id,
+					roomCode: msg.room_code ?? null,
+					player1: msg.player1,
+					player2: msg.player2,
+					p1Status: 'Idle',
+					p2Status: 'Idle',
+					problem: msg.problem,
+					durationMs: Number(msg.duration_ms),
+					elapsedMs: Number(msg.elapsed_ms),
+					startsAtMs: Number(msg.starts_at_ms),
+					endsAtMs: Number(msg.ends_at_ms)
+				};
+				break;
+			}
+
+			case 'SpectatorUpdate': {
+				if (game.spectatorState) {
+					if (msg.player_id === game.spectatorState.player1.player_id) {
+						game.spectatorState.p1Status = msg.status;
+					} else if (msg.player_id === game.spectatorState.player2.player_id) {
+						game.spectatorState.p2Status = msg.status;
+					}
+				}
 				break;
 			}
 
@@ -278,6 +333,51 @@ export class ProofBattleClient {
 	leaveQueue() {
 		if (this.state === 'matchmaking') {
 			this.transition('LEAVE_QUEUE');
+			game.privateRoomCode = null;
+			game.isPrivateRoomHost = false;
+			this.send({ type: 'QueueLeave' });
+		}
+	}
+
+	createPrivateRoom(category?: string, difficulty?: number, durationSecs?: number) {
+		if (this.state === 'connected_idle' || this.state === 'game_ended') {
+			this.transition('JOIN_QUEUE');
+			game.reset();
+			this.send({
+				type: 'CreatePrivateRoom',
+				category: category ?? null,
+				difficulty: difficulty ?? null,
+				duration_secs: durationSecs ? BigInt(durationSecs) : null
+			});
+		}
+	}
+
+	joinPrivateRoom(roomCode: string) {
+		if (this.state === 'connected_idle' || this.state === 'game_ended') {
+			this.transition('JOIN_QUEUE');
+			game.reset();
+			this.send({
+				type: 'JoinPrivateRoom',
+				room_code: roomCode.trim().toUpperCase()
+			});
+		}
+	}
+
+	spectateRoom(roomCode: string) {
+		if (this.state === 'connected_idle' || this.state === 'game_ended') {
+			game.reset();
+			this.send({
+				type: 'SpectateRoom',
+				room_code: roomCode.trim().toUpperCase()
+			});
+		}
+	}
+
+	leaveSpectator() {
+		if (this.state === 'spectating' || this.state === 'game_ended') {
+			this.transition('SPECTATE_LEAVE');
+			game.isSpectating = false;
+			game.spectatorState = null;
 			this.send({ type: 'QueueLeave' });
 		}
 	}

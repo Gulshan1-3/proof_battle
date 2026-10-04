@@ -6,6 +6,7 @@ export type ConnState =
 	| 'game_starting'
 	| 'in_game'
 	| 'submitting'
+	| 'spectating'
 	| 'reconnecting'
 	| 'reattaching'
 	| 'game_ended'
@@ -22,6 +23,8 @@ export type ConnEvent =
 	| 'SUBMIT_PROOF'
 	| 'MSG_VERDICT_REJECTED'
 	| 'MSG_ROUND_END'
+	| 'SPECTATE_JOINED'
+	| 'SPECTATE_LEAVE'
 	| 'RESIGN'
 	| 'DISCONNECT'
 	| 'RECONNECT_ATTEMPT'
@@ -43,6 +46,7 @@ export const TRANSITIONS: Record<ConnState, Partial<Record<ConnEvent, ConnState>
 	connected_idle: {
 		MSG_WELCOME: 'connected_idle',
 		JOIN_QUEUE: 'matchmaking',
+		SPECTATE_JOINED: 'spectating',
 		DISCONNECT: 'disconnected',
 		ERROR: 'error'
 	},
@@ -71,6 +75,13 @@ export const TRANSITIONS: Record<ConnState, Partial<Record<ConnEvent, ConnState>
 		DISCONNECT: 'reconnecting',
 		ERROR: 'error'
 	},
+	spectating: {
+		SPECTATE_LEAVE: 'connected_idle',
+		LEAVE_QUEUE: 'connected_idle',
+		MSG_ROUND_END: 'game_ended',
+		DISCONNECT: 'disconnected',
+		ERROR: 'error'
+	},
 	reconnecting: {
 		CONNECT: 'connecting',
 		REATTACH_SUCCESS: 'in_game',
@@ -85,6 +96,8 @@ export const TRANSITIONS: Record<ConnState, Partial<Record<ConnEvent, ConnState>
 	},
 	game_ended: {
 		JOIN_QUEUE: 'matchmaking',
+		SPECTATE_LEAVE: 'connected_idle',
+		LEAVE_QUEUE: 'connected_idle',
 		RESET: 'connected_idle',
 		CONNECT: 'connecting',
 		DISCONNECT: 'disconnected'

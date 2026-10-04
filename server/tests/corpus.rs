@@ -159,6 +159,7 @@ define_corpus_test!(test_cheat_sorry_in_simpa, "cheat_sorry_in_simpa");
 define_corpus_test!(test_cheat_builtin_axiom, "cheat_builtin_axiom");
 define_corpus_test!(test_cheat_statement_swap, "cheat_statement_swap");
 define_corpus_test!(test_cheat_option_downgrade, "cheat_option_downgrade");
+define_corpus_test!(test_cheat_set_option_nested, "cheat_set_option_nested");
 define_corpus_test!(test_cheat_maxheartbeats, "cheat_maxheartbeats");
 define_corpus_test!(test_rce_eval_io, "rce_eval_io");
 define_corpus_test!(test_rce_eval_shell, "rce_eval_shell");
@@ -200,7 +201,10 @@ fn test_preamble_offset_arithmetic_single_and_multi_imports() {
     // line 3: set_option maxHeartbeats ...
     // line 4: (blank)
     // line 5: theorem goal : ∀ n : ℕ, n + 0 = n := by
-    assert_eq!(preamble_lines1, 5, "Problem with 1 import must have 5 preamble lines");
+    assert_eq!(
+        preamble_lines1, 5,
+        "Problem with 1 import must have 5 preamble lines"
+    );
 
     // Lean error at generated-line 7 maps to body-line 2 (7 - 5 = 2)
     let diag1 = Diagnostic::from_raw_lean(
@@ -212,7 +216,10 @@ fn test_preamble_offset_arithmetic_single_and_multi_imports() {
         DiagnosticSeverity::Error,
         "unsolved goals".to_string(),
     );
-    assert_eq!(diag1.line, 2, "Generated line 7 with 1 import must map to body line 2");
+    assert_eq!(
+        diag1.line, 2,
+        "Generated line 7 with 1 import must map to body line 2"
+    );
 
     // 2. Problem with 4 imports
     let multi_imports = vec![
@@ -230,7 +237,10 @@ fn test_preamble_offset_arithmetic_single_and_multi_imports() {
     .unwrap();
 
     // 4 imports give 8 preamble lines (4 imports + 4 template lines)
-    assert_eq!(preamble_lines2, 8, "Problem with 4 imports must have 8 preamble lines");
+    assert_eq!(
+        preamble_lines2, 8,
+        "Problem with 4 imports must have 8 preamble lines"
+    );
 
     // Lean error at generated-line 10 (preamble_lines2 + 2) maps to body-line 2 (10 - 8 = 2)
     let diag2 = Diagnostic::from_raw_lean(
@@ -242,10 +252,23 @@ fn test_preamble_offset_arithmetic_single_and_multi_imports() {
         DiagnosticSeverity::Error,
         "unsolved goals".to_string(),
     );
-    assert_eq!(diag2.line, 2, "Body line 2 must map to line 2 in both 1-import and 4-import cases");
+    assert_eq!(
+        diag2.line, 2,
+        "Body line 2 must map to line 2 in both 1-import and 4-import cases"
+    );
 
     // If preamble lines were hardcoded (e.g. 5), generated line 10 would incorrectly map to line 5
-    let hardcoded_diag = Diagnostic::from_raw_lean(10, 1, 10, 5, 5, DiagnosticSeverity::Error, "err".to_string());
-    assert_eq!(hardcoded_diag.line, 5, "Shows hardcoded offset fails on varying import sizes");
+    let hardcoded_diag = Diagnostic::from_raw_lean(
+        10,
+        1,
+        10,
+        5,
+        5,
+        DiagnosticSeverity::Error,
+        "err".to_string(),
+    );
+    assert_eq!(
+        hardcoded_diag.line, 5,
+        "Shows hardcoded offset fails on varying import sizes"
+    );
 }
-

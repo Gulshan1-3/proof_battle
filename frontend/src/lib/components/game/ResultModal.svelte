@@ -9,12 +9,49 @@
 		onrematch?: () => void;
 		onnewmatch?: () => void;
 		onclose?: () => void;
+		isSpectator?: boolean;
+		player1Id?: string | null;
+		player1Name?: string | null;
+		player2Id?: string | null;
+		player2Name?: string | null;
 	}
 
-	let { open = $bindable(false), result, onrematch, onnewmatch, onclose }: Props = $props();
+	let {
+		open = $bindable(false),
+		result,
+		onrematch,
+		onnewmatch,
+		onclose,
+		isSpectator = false,
+		player1Id,
+		player1Name,
+		player2Id,
+		player2Name
+	}: Props = $props();
 
-	const isWin = $derived(result.outcome === 'Won' || result.outcome === 'ForfeitWin');
-	const isLoss = $derived(result.outcome === 'Lost' || result.outcome === 'ForfeitLoss');
+	const isWin = $derived(
+		!isSpectator && (result.outcome === 'Won' || result.outcome === 'ForfeitWin')
+	);
+	const isLoss = $derived(
+		!isSpectator && (result.outcome === 'Lost' || result.outcome === 'ForfeitLoss')
+	);
+
+	const winnerName = $derived.by(() => {
+		if (!result.winnerId) return null;
+		if (player1Id && result.winnerId === player1Id) return player1Name || 'Player 1';
+		if (player2Id && result.winnerId === player2Id) return player2Name || 'Player 2';
+		return null;
+	});
+
+	const spectatorHeadline = $derived.by(() => {
+		if (winnerName) {
+			return `${winnerName} Wins`;
+		}
+		if (result.outcome === 'Won' || result.outcome === 'ForfeitWin') {
+			return 'Match Concluded';
+		}
+		return 'Match Drawn';
+	});
 
 	const durationFormatted = $derived.by(() => {
 		const totalSecs = Math.round(Number(result.durationMs) / 1000);
@@ -43,17 +80,19 @@
 	});
 </script>
 
-<Modal bind:open title="Match Concluded" {onclose}>
+<Modal bind:open title={isSpectator ? 'Spectator Result' : 'Match Concluded'} {onclose}>
 	<div class="flex flex-col items-center space-y-4 py-2 text-center">
 		<!-- Trophy or outcome badge -->
 		<div
-			class="inline-flex h-16 w-16 items-center justify-center rounded-full {isWin
-				? 'bg-[rgba(52,211,153,0.15)] text-[var(--success)]'
-				: isLoss
-					? 'bg-[rgba(248,113,113,0.15)] text-[var(--error)]'
-					: 'bg-[var(--bg-elevated)] text-[var(--text-secondary)]'} shadow-inner"
+			class="inline-flex h-16 w-16 items-center justify-center rounded-full {isSpectator
+				? 'bg-[rgba(124,106,247,0.15)] text-[var(--accent-bright)]'
+				: isWin
+					? 'bg-[rgba(52,211,153,0.15)] text-[var(--success)]'
+					: isLoss
+						? 'bg-[rgba(248,113,113,0.15)] text-[var(--error)]'
+						: 'bg-[var(--bg-elevated)] text-[var(--text-secondary)]'} shadow-inner"
 		>
-			{#if isWin}
+			{#if isSpectator || isWin}
 				<svg
 					width="32"
 					height="32"
@@ -86,7 +125,11 @@
 
 		<div>
 			<h3 class="text-2xl font-black tracking-tight text-[var(--text-primary)]">
-				{isWin ? 'VICTORY' : isLoss ? 'DEFEAT' : 'DRAW'}
+				{#if isSpectator}
+					{spectatorHeadline}
+				{:else}
+					{isWin ? 'VICTORY' : isLoss ? 'DEFEAT' : 'DRAW'}
+				{/if}
 			</h3>
 			<p class="mt-0.5 text-xs tracking-widest text-[var(--text-secondary)] uppercase">
 				Outcome: {result.outcome}
@@ -96,16 +139,25 @@
 		<!-- Rating & Match Stats Grid -->
 		<div class="grid w-full max-w-sm grid-cols-2 gap-3 pt-2">
 			<div class="panel-elevated p-3 text-center">
-				<span class="block text-[11px] tracking-wider text-[var(--text-secondary)] uppercase"
-					>Rating Change</span
-				>
-				<span
-					class="font-mono text-lg font-bold {result.eloDelta >= 0
-						? 'text-[var(--success)]'
-						: 'text-[var(--error)]'}"
-				>
-					{result.eloDelta >= 0 ? `+${result.eloDelta}` : result.eloDelta}
-				</span>
+				{#if isSpectator}
+					<span class="block text-[11px] tracking-wider text-[var(--text-secondary)] uppercase"
+						>Mode</span
+					>
+					<span class="font-mono text-sm font-bold text-[var(--accent-bright)]"
+						>Spectator (Unrated)</span
+					>
+				{:else}
+					<span class="block text-[11px] tracking-wider text-[var(--text-secondary)] uppercase"
+						>Rating Change</span
+					>
+					<span
+						class="font-mono text-lg font-bold {result.eloDelta >= 0
+							? 'text-[var(--success)]'
+							: 'text-[var(--error)]'}"
+					>
+						{result.eloDelta >= 0 ? `+${result.eloDelta}` : result.eloDelta}
+					</span>
+				{/if}
 			</div>
 			<div class="panel-elevated p-3 text-center">
 				<span class="block text-[11px] tracking-wider text-[var(--text-secondary)] uppercase"
@@ -148,7 +200,11 @@
 	</div>
 
 	{#snippet footer()}
-		<Button variant="secondary" onclick={onrematch}>Rematch</Button>
-		<Button variant="primary" onclick={onnewmatch}>New Opponent</Button>
+		{#if isSpectator}
+			<Button variant="primary" onclick={onnewmatch}>Return to Lobby</Button>
+		{:else}
+			<Button variant="secondary" onclick={onrematch}>Rematch</Button>
+			<Button variant="primary" onclick={onnewmatch}>New Opponent</Button>
+		{/if}
 	{/snippet}
 </Modal>

@@ -225,6 +225,8 @@ pub enum ConnState {
     Connected,
     InQueue,
     InGame { room_id: RoomId },
+    AwaitingPrivateOpponent,
+    Spectating { room_id: RoomId },
     Closed,
 }
 
@@ -237,9 +239,12 @@ impl ConnState {
             (ConnState::AwaitingHello, ClientMessage::Hello { .. }) => Ok(()),
             (ConnState::AwaitingHello, _) => Err("invalid_state: expected Hello frame"),
 
-            // Connected (Lobby) accepts QueueJoin, PracticeJoin, Pong, Hello (re-auth)
+            // Connected (Lobby) accepts QueueJoin, PracticeJoin, CreatePrivateRoom, JoinPrivateRoom, SpectateRoom, Pong, Hello (re-auth)
             (ConnState::Connected, ClientMessage::QueueJoin {}) => Ok(()),
             (ConnState::Connected, ClientMessage::PracticeJoin {}) => Ok(()),
+            (ConnState::Connected, ClientMessage::CreatePrivateRoom { .. }) => Ok(()),
+            (ConnState::Connected, ClientMessage::JoinPrivateRoom { .. }) => Ok(()),
+            (ConnState::Connected, ClientMessage::SpectateRoom { .. }) => Ok(()),
             (ConnState::Connected, ClientMessage::Pong { .. }) => Ok(()),
             (ConnState::Connected, ClientMessage::Hello { .. }) => Ok(()),
             (ConnState::Connected, ClientMessage::ProofRequest { .. }) => {
@@ -261,6 +266,15 @@ impl ConnState {
             (ConnState::InQueue, ClientMessage::PracticeJoin {}) => {
                 Err("invalid_state: already in queue")
             }
+            (ConnState::InQueue, ClientMessage::CreatePrivateRoom { .. }) => {
+                Err("invalid_state: already in queue")
+            }
+            (ConnState::InQueue, ClientMessage::JoinPrivateRoom { .. }) => {
+                Err("invalid_state: already in queue")
+            }
+            (ConnState::InQueue, ClientMessage::SpectateRoom { .. }) => {
+                Err("invalid_state: already in queue")
+            }
             (ConnState::InQueue, ClientMessage::ProofRequest { .. }) => {
                 Err("invalid_state: cannot submit proof while in queue")
             }
@@ -271,6 +285,18 @@ impl ConnState {
                 Err("invalid_state: cannot re-authenticate while in queue")
             }
 
+            // AwaitingPrivateOpponent accepts QueueLeave, Pong
+            (ConnState::AwaitingPrivateOpponent, ClientMessage::QueueLeave {}) => Ok(()),
+            (ConnState::AwaitingPrivateOpponent, ClientMessage::Pong { .. }) => Ok(()),
+            (ConnState::AwaitingPrivateOpponent, _) => {
+                Err("invalid_state: waiting for private room opponent")
+            }
+
+            // Spectating accepts QueueLeave, Pong
+            (ConnState::Spectating { .. }, ClientMessage::QueueLeave {}) => Ok(()),
+            (ConnState::Spectating { .. }, ClientMessage::Pong { .. }) => Ok(()),
+            (ConnState::Spectating { .. }, _) => Err("invalid_state: currently spectating match"),
+
             // InGame accepts ProofRequest, Resign, Pong
             (ConnState::InGame { .. }, ClientMessage::ProofRequest { .. }) => Ok(()),
             (ConnState::InGame { .. }, ClientMessage::Resign {}) => Ok(()),
@@ -280,6 +306,15 @@ impl ConnState {
             }
             (ConnState::InGame { .. }, ClientMessage::PracticeJoin {}) => {
                 Err("invalid_state: cannot join practice while in match")
+            }
+            (ConnState::InGame { .. }, ClientMessage::CreatePrivateRoom { .. }) => {
+                Err("invalid_state: cannot create room while in match")
+            }
+            (ConnState::InGame { .. }, ClientMessage::JoinPrivateRoom { .. }) => {
+                Err("invalid_state: cannot join room while in match")
+            }
+            (ConnState::InGame { .. }, ClientMessage::SpectateRoom { .. }) => {
+                Err("invalid_state: cannot spectate while in match")
             }
             (ConnState::InGame { .. }, ClientMessage::QueueLeave {}) => {
                 Err("invalid_state: cannot leave queue while in match")

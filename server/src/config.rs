@@ -54,7 +54,9 @@ pub struct Config {
     pub database_url: Option<String>, // None => in-memory problem source
     pub sandbox_enabled: bool,        // default false in dev, MUST be true in prod
     pub sandbox_image: String,        // default "proofbattle/lean-sandbox:lean-4.21.0-rc3"
+    pub seccomp_profile_path: Option<PathBuf>, // None => auto-resolved
     pub reconnect_grace_window: Duration, // default 10s
+    pub handshake_timeout: Duration,  // default 10s
     pub protocol_version: u32,        // default 1
     pub log_filter: String,           // default "proof_battle_server=info"
 }
@@ -120,6 +122,11 @@ impl Config {
             .cloned()
             .unwrap_or_else(|| "proofbattle/lean-sandbox:lean-4.21.0-rc3".to_string());
 
+        let seccomp_profile_path = map
+            .get("SECCOMP_PROFILE_PATH")
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from);
+
         let reconnect_grace_ms = parse_u64(
             map,
             "RECONNECT_GRACE_WINDOW_MS",
@@ -127,6 +134,10 @@ impl Config {
             "integer milliseconds",
         )?;
         let reconnect_grace_window = Duration::from_millis(reconnect_grace_ms);
+
+        let handshake_timeout_ms =
+            parse_u64(map, "HANDSHAKE_TIMEOUT_MS", 10_000, "integer milliseconds")?;
+        let handshake_timeout = Duration::from_millis(handshake_timeout_ms);
 
         let protocol_version = parse_u32(map, "PROTOCOL_VERSION", 1, "positive integer")?;
         let log_filter = map
@@ -149,12 +160,20 @@ impl Config {
             });
         }
 
+        if pb_env == "production" && !sandbox_enabled {
+            return Err(ConfigError::InvalidValue {
+                var: "SANDBOX_ENABLED".to_string(),
+                val: "false".to_string(),
+                expected: "SANDBOX_ENABLED=true is strictly required when PB_ENV=production",
+            });
+        }
+
         if database_url.is_none() {
             tracing::warn!("in-memory problem source: 3 problems, ELO disabled");
         }
 
         if !sandbox_enabled {
-            tracing::warn!("SANDBOX DISABLED — LOCAL DEVELOPMENT ONLY");
+            tracing::warn!("SANDBOX DISABLED: LOCAL DEVELOPMENT ONLY");
         }
 
         Ok(Config {
@@ -176,7 +195,9 @@ impl Config {
             database_url,
             sandbox_enabled,
             sandbox_image,
+            seccomp_profile_path,
             reconnect_grace_window,
+            handshake_timeout,
             protocol_version,
             log_filter,
         })
@@ -365,6 +386,38 @@ mod tests {
         assert!(
             err.to_string()
                 .contains("DATABASE_URL is strictly required")
+        );
+    }
+
+    #[test]
+    fn test_production_sandbox_enabled_requirement() {
+        let mut env = HashMap::new();
+        env.insert("PB_ENV".to_string(), "production".to_string());
+        env.insert(
+            "DATABASE_URL".to_string(),
+            "postgres://user:pass@localhost/db".to_string(),
+        );
+        let err = Config::from_map(&env).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("SANDBOX_ENABLED=true is strictly required")
+        );
+
+        env.insert("SANDBOX_ENABLED".to_string(), "true".to_string());
+        assert!(Config::from_map(&env).is_ok());
+    }
+
+    #[test]
+    fn test_seccomp_profile_path_config() {
+        let mut env = HashMap::new();
+        env.insert(
+            "SECCOMP_PROFILE_PATH".to_string(),
+            "/etc/docker/seccomp.json".to_string(),
+        );
+        let config = Config::from_map(&env).unwrap();
+        assert_eq!(
+            config.seccomp_profile_path,
+            Some(PathBuf::from("/etc/docker/seccomp.json"))
         );
     }
 }

@@ -34,7 +34,10 @@ impl Bucket {
 
     fn try_consume(&mut self, cost: f64) -> Result<(), Duration> {
         let now = Instant::now();
-        let elapsed = now.duration_since(self.last_updated).as_secs_f64();
+        let elapsed = now
+            .checked_duration_since(self.last_updated)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
         self.tokens = (self.tokens + elapsed * self.refill_rate_per_sec).min(self.max_tokens);
         self.last_updated = now;
 
@@ -46,6 +49,14 @@ impl Bucket {
             let wait_secs = needed / self.refill_rate_per_sec;
             Err(Duration::from_secs_f64(wait_secs))
         }
+    }
+
+    fn is_fully_refilled(&self, now: Instant) -> bool {
+        let elapsed = now
+            .checked_duration_since(self.last_updated)
+            .map(|d| d.as_secs_f64())
+            .unwrap_or(0.0);
+        (self.tokens + elapsed * self.refill_rate_per_sec) >= self.max_tokens
     }
 }
 
@@ -69,19 +80,44 @@ impl RateLimiter {
     /// Checks if a submit is allowed for `player_id`. Returns Ok(()) or Err(retry_after).
     pub async fn check_submit(&self, player_id: PlayerId) -> Result<(), Duration> {
         let mut map = self.submit_buckets.write().await;
+        if map.len() > 64 {
+            let now = Instant::now();
+            map.retain(|_, b| !b.is_fully_refilled(now));
+        }
         let bucket = map
             .entry(player_id)
             .or_insert_with(|| Bucket::new(5.0, Duration::from_secs(60)));
-        bucket.try_consume(1.0)
+        let res = bucket.try_consume(1.0);
+        if res.is_err() {
+            crate::metrics::get_metrics().record_rate_limited();
+        }
+        res
     }
 
     /// Checks if a live diagnostic check is allowed for `player_id`. Returns Ok(()) or Err(retry_after).
     pub async fn check_diagnostic(&self, player_id: PlayerId) -> Result<(), Duration> {
         let mut map = self.check_buckets.write().await;
+        if map.len() > 64 {
+            let now = Instant::now();
+            map.retain(|_, b| !b.is_fully_refilled(now));
+        }
         let bucket = map
             .entry(player_id)
             .or_insert_with(|| Bucket::new(1.0, Duration::from_secs(2)));
-        bucket.try_consume(1.0)
+        let res = bucket.try_consume(1.0);
+        if res.is_err() {
+            crate::metrics::get_metrics().record_rate_limited();
+        }
+        res
+    }
+
+    /// Explicitly purges fully refilled buckets to bound memory usage without resetting active penalties.
+    pub async fn cleanup_stale(&self) {
+        let now = Instant::now();
+        let mut s_map = self.submit_buckets.write().await;
+        s_map.retain(|_, b| !b.is_fully_refilled(now));
+        let mut c_map = self.check_buckets.write().await;
+        c_map.retain(|_, b| !b.is_fully_refilled(now));
     }
 
     pub async fn remove_player(&self, player_id: &PlayerId) {
@@ -89,6 +125,12 @@ impl RateLimiter {
         s_map.remove(player_id);
         let mut c_map = self.check_buckets.write().await;
         c_map.remove(player_id);
+    }
+
+    pub async fn bucket_count(&self) -> (usize, usize) {
+        let s_map = self.submit_buckets.read().await;
+        let c_map = self.check_buckets.read().await;
+        (s_map.len(), c_map.len())
     }
 }
 
@@ -159,11 +201,18 @@ impl VerifierPool {
         config: &Config,
         processed_code: &str,
     ) -> Result<VerifyOutcome, RejectReason> {
+        let start = Instant::now();
         let permit =
             match tokio::time::timeout(self.acquire_timeout, self.submit_semaphore.acquire()).await
             {
-                Ok(Ok(p)) => p,
-                _ => return Err(RejectReason::Busy),
+                Ok(Ok(p)) => {
+                    crate::metrics::get_metrics().record_queue_wait(start.elapsed().as_secs_f64());
+                    p
+                }
+                _ => {
+                    crate::metrics::get_metrics().record_queue_dropped("submit");
+                    return Err(RejectReason::Busy);
+                }
             };
 
         self.in_flight_submits.fetch_add(1, Ordering::Relaxed);
@@ -181,7 +230,13 @@ impl VerifierPool {
     /// Check lane: best-effort with try_acquire only.
     /// If full, drops check immediately without queueing and returns Ok(None).
     pub async fn run_check(&self, config: &Config, processed_code: &str) -> Option<VerifyOutcome> {
-        let permit = self.check_semaphore.try_acquire().ok()?;
+        let permit = match self.check_semaphore.try_acquire() {
+            Ok(p) => p,
+            Err(_) => {
+                crate::metrics::get_metrics().record_queue_dropped("check");
+                return None;
+            }
+        };
 
         self.in_flight_checks.fetch_add(1, Ordering::Relaxed);
         self.notify_metrics();
@@ -231,31 +286,43 @@ pub async fn run_check_only(
     let processed = crate::utils::preprocess(&wrapped.0);
 
     match pool.run_check(config, &processed).await {
-        Some(outcome) => match outcome.verdict {
-            Verdict::Accepted { .. } => (vec![], false),
-            Verdict::Rejected { stderr, .. } => {
-                let diag = Diagnostic {
-                    line: 1,
-                    col: 1,
-                    end_line: 1,
-                    end_col: 1,
-                    severity: DiagnosticSeverity::Error,
-                    message: stderr,
-                };
-                (vec![diag], false)
+        Some(outcome) => {
+            let (v_str, r_str) = match &outcome.verdict {
+                Verdict::Accepted { .. } => ("Accepted", None),
+                Verdict::Rejected { reason, .. } => ("Rejected", Some(reason.as_str())),
+                Verdict::Error(_) => ("Error", None),
+            };
+            crate::metrics::get_metrics().record_verification(
+                v_str,
+                r_str,
+                outcome.elapsed_ms as f64 / 1000.0,
+            );
+            match outcome.verdict {
+                Verdict::Accepted { .. } => (vec![], false),
+                Verdict::Rejected { stderr, .. } => {
+                    let diag = Diagnostic {
+                        line: 1,
+                        col: 1,
+                        end_line: 1,
+                        end_col: 1,
+                        severity: DiagnosticSeverity::Error,
+                        message: stderr,
+                    };
+                    (vec![diag], false)
+                }
+                Verdict::Error(e) => {
+                    let diag = Diagnostic {
+                        line: 1,
+                        col: 1,
+                        end_line: 1,
+                        end_col: 1,
+                        severity: DiagnosticSeverity::Error,
+                        message: e,
+                    };
+                    (vec![diag], false)
+                }
             }
-            Verdict::Error(e) => {
-                let diag = Diagnostic {
-                    line: 1,
-                    col: 1,
-                    end_line: 1,
-                    end_col: 1,
-                    severity: DiagnosticSeverity::Error,
-                    message: e,
-                };
-                (vec![diag], false)
-            }
-        },
+        }
         None => {
             // Check lane full -> check skipped silently
             (vec![], true)
@@ -321,5 +388,23 @@ mod tests {
         assert_eq!(res.unwrap_err(), RejectReason::Busy);
 
         drop(permit);
+    }
+
+    #[tokio::test]
+    async fn test_rate_limiter_stale_cleanup() {
+        let limiter = RateLimiter::new();
+        let player = PlayerId::new();
+
+        // Consume all tokens
+        for _ in 0..5 {
+            assert!(limiter.check_submit(player).await.is_ok());
+        }
+        let (submits, _) = limiter.bucket_count().await;
+        assert_eq!(submits, 1);
+
+        // Immediate cleanup does not purge throttled bucket
+        limiter.cleanup_stale().await;
+        let (submits_after, _) = limiter.bucket_count().await;
+        assert_eq!(submits_after, 1);
     }
 }

@@ -76,6 +76,12 @@ pub fn build_docker_argv(
 }
 
 pub fn resolve_seccomp_path() -> PathBuf {
+    if let Ok(env_path) = std::env::var("SECCOMP_PROFILE_PATH") {
+        let p = PathBuf::from(env_path);
+        if p.exists() {
+            return std::fs::canonicalize(&p).unwrap_or(p);
+        }
+    }
     let candidate = PathBuf::from("infra/sandbox/seccomp.json");
     if candidate.exists() {
         return std::fs::canonicalize(&candidate).unwrap_or(candidate);
@@ -92,8 +98,12 @@ pub fn resolve_seccomp_path() -> PathBuf {
         if cand.exists() {
             return std::fs::canonicalize(&cand).unwrap_or(cand);
         }
+        let cand2 = cwd.join("infra/sandbox/seccomp.json");
+        if cand2.exists() {
+            return std::fs::canonicalize(&cand2).unwrap_or(cand2);
+        }
     }
-    PathBuf::from("/home/gulshansharma/proof_battle/infra/sandbox/seccomp.json")
+    PathBuf::from("infra/sandbox/seccomp.json")
 }
 
 struct TempFileGuard(PathBuf);
@@ -143,7 +153,10 @@ pub async fn verify_sandboxed(config: &Config, source: &str) -> VerifyOutcome {
         Err(_) => file_path.clone(),
     };
 
-    let seccomp_path = resolve_seccomp_path();
+    let seccomp_path = config
+        .seccomp_profile_path
+        .clone()
+        .unwrap_or_else(resolve_seccomp_path);
     let args = build_docker_argv(config, &abs_file_path, file_id, &seccomp_path);
 
     let mut cmd = tokio::process::Command::new("docker");
@@ -193,7 +206,7 @@ pub async fn verify_sandboxed(config: &Config, source: &str) -> VerifyOutcome {
         buf
     };
 
-    // Execute with timeout — give Docker 5 extra seconds beyond lean_timeout
+    // Execute with timeout: give Docker 5 extra seconds beyond lean_timeout
     let timeout_duration = config.lean_timeout + std::time::Duration::from_secs(5);
     let execution_result = tokio::time::timeout(timeout_duration, async {
         let (status, stdout, stderr) = tokio::join!(child.wait(), stdout_reader, stderr_reader);

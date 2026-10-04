@@ -5,12 +5,17 @@ pub mod error;
 pub mod game;
 pub mod lean;
 pub mod message;
+pub mod metrics;
 pub mod utils;
 pub mod ws;
 
 use axum::{
-    Router,
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    Json, Router,
+    extract::{
+        Path, Query,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+    },
+    http::StatusCode,
     routing::get,
 };
 use config::Config;
@@ -21,19 +26,33 @@ use game::matchmaker::MatchmakerHandle;
 use game::queue::run_check_only;
 use game::session::{ConnState, InMemorySessionStore, SessionStore};
 use message::*;
+use serde::Deserialize;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
+#[derive(Deserialize)]
+pub struct HistoryQuery {
+    pub player_id: uuid::Uuid,
+    pub limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+pub struct StatsQuery {
+    pub player_id: uuid::Uuid,
+}
+
 pub fn create_app(config: Arc<Config>) -> Router {
-    let matchmaker = Matchmaker::spawn(config.clone());
+    let history = Arc::new(game::history::HistoryStore::new(None));
+    let matchmaker = Matchmaker::spawn_with_history(config.clone(), history.clone());
     let sessions = Arc::new(InMemorySessionStore::new(config.session_ttl));
-    create_app_with_components(config, matchmaker, sessions)
+    create_app_with_components_and_history(config, matchmaker, sessions, history)
 }
 
 pub fn create_app_with_matchmaker(config: Arc<Config>, matchmaker: MatchmakerHandle) -> Router {
+    let history = Arc::new(game::history::HistoryStore::new(None));
     let sessions = Arc::new(InMemorySessionStore::new(config.session_ttl));
-    create_app_with_components(config, matchmaker, sessions)
+    create_app_with_components_and_history(config, matchmaker, sessions, history)
 }
 
 pub fn create_app_with_components(
@@ -41,17 +60,129 @@ pub fn create_app_with_components(
     matchmaker: MatchmakerHandle,
     sessions: Arc<InMemorySessionStore>,
 ) -> Router {
-    Router::new().route(
-        "/ws",
-        get(move |ws: WebSocketUpgrade| {
-            let matchmaker = matchmaker.clone();
-            let config = config.clone();
-            let sessions = sessions.clone();
-            async move {
-                ws.on_upgrade(move |socket| handle_socket(socket, matchmaker, sessions, config))
-            }
-        }),
-    )
+    let history = Arc::new(game::history::HistoryStore::new(None));
+    create_app_with_components_and_history(config, matchmaker, sessions, history)
+}
+
+pub fn create_app_with_components_and_history(
+    config: Arc<Config>,
+    matchmaker: MatchmakerHandle,
+    sessions: Arc<InMemorySessionStore>,
+    history: Arc<game::history::HistoryStore>,
+) -> Router {
+    let ws_matchmaker = matchmaker.clone();
+    let ws_config = config.clone();
+    let ws_sessions = sessions.clone();
+    let ready_config = config.clone();
+    let api_history = history.clone();
+    let api_matches = history.clone();
+    let api_stats = history;
+
+    Router::new()
+        .route(
+            "/ws",
+            get(move |ws: WebSocketUpgrade| {
+                let matchmaker = ws_matchmaker.clone();
+                let config = ws_config.clone();
+                let sessions = ws_sessions.clone();
+                async move {
+                    ws.max_message_size(64 * 1024).on_upgrade(move |socket| {
+                        handle_socket(socket, matchmaker, sessions, config)
+                    })
+                }
+            }),
+        )
+        .route("/healthz", get(|| async { (StatusCode::OK, "OK") }))
+        .route(
+            "/readyz",
+            get(move || {
+                let config = ready_config.clone();
+                async move { handle_readyz(config).await }
+            }),
+        )
+        .route(
+            "/metrics",
+            get(|| async {
+                (
+                    StatusCode::OK,
+                    [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
+                    metrics::get_metrics().render(),
+                )
+            }),
+        )
+        .route(
+            "/api/history",
+            get(move |Query(q): Query<HistoryQuery>| {
+                let history = api_history.clone();
+                async move {
+                    let limit = q.limit.unwrap_or(20);
+                    let items = history.get_player_history(q.player_id, limit).await;
+                    (StatusCode::OK, Json(items))
+                }
+            }),
+        )
+        .route(
+            "/api/matches/:id",
+            get(move |Path(match_id): Path<uuid::Uuid>| {
+                let history = api_matches.clone();
+                async move {
+                    match history.get_match_detail(match_id).await {
+                        Some(record) => (StatusCode::OK, Json(Some(record))),
+                        None => (
+                            StatusCode::NOT_FOUND,
+                            Json(None::<game::history::MatchRecord>),
+                        ),
+                    }
+                }
+            }),
+        )
+        .route(
+            "/api/stats",
+            get(move |Query(q): Query<StatsQuery>| {
+                let history = api_stats.clone();
+                async move {
+                    let stats = history.get_player_stats(q.player_id).await;
+                    (StatusCode::OK, Json(stats))
+                }
+            }),
+        )
+}
+
+async fn handle_readyz(config: Arc<Config>) -> (StatusCode, &'static str) {
+    if config.sandbox_enabled {
+        // If sandbox execution is enabled, verify the container image is available.
+        // Returning 503 prevents the service from silently running unsandboxed.
+        let image = &config.sandbox_image;
+        let check = tokio::process::Command::new("docker")
+            .args(["image", "inspect", image])
+            .output()
+            .await;
+
+        match check {
+            Ok(output) if output.status.success() => (StatusCode::OK, "READY"),
+            _ => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Service Unavailable: sandbox image missing",
+            ),
+        }
+    } else {
+        (StatusCode::OK, "READY")
+    }
+}
+
+struct WsConnectionGuard;
+
+impl WsConnectionGuard {
+    fn new() -> Self {
+        metrics::get_metrics().inc_ws_connections();
+        Self
+    }
+}
+
+impl Drop for WsConnectionGuard {
+    fn drop(&mut self) {
+        metrics::get_metrics().dec_ws_connections();
+    }
 }
 
 pub async fn handle_socket(
@@ -60,6 +191,7 @@ pub async fn handle_socket(
     sessions: Arc<InMemorySessionStore>,
     config: Arc<Config>,
 ) {
+    let _ws_guard = WsConnectionGuard::new();
     let (mut sender, mut receiver) = stream.split();
 
     // Outbound channel capacity 64 to prevent unbounded memory growth under slow consumers
@@ -84,6 +216,7 @@ pub async fn handle_socket(
     let mut state = ConnState::AwaitingHello;
     let mut player_id = PlayerId::new();
     let mut missed_pongs = 0u32;
+    let handshake_deadline = tokio::time::Instant::now() + config.handshake_timeout;
 
     let heartbeat_interval_ms = 15000u64;
     let mut ping_interval = tokio::time::interval_at(
@@ -94,6 +227,16 @@ pub async fn handle_socket(
 
     loop {
         tokio::select! {
+            _ = tokio::time::sleep_until(handshake_deadline), if state == ConnState::AwaitingHello => {
+                tracing::warn!(player_id = %player_id, "handshake timeout: Hello message not received in 10s");
+                let _ = tx.send(ServerMessage::ServerError {
+                    code: "handshake_timeout".to_string(),
+                    message: "connection closed: hello handshake timeout (10s)".to_string(),
+                    retry_after_ms: None,
+                    retryable: true,
+                }).await;
+                break;
+            }
             _ = ping_interval.tick() => {
                 if state != ConnState::AwaitingHello && state != ConnState::Closed {
                     if missed_pongs >= 2 {
@@ -143,7 +286,12 @@ pub async fn handle_socket(
                         // Check with current room status to keep ConnState up-to-date
                         if let Some(r_id) = matchmaker.get_player_room(player_id).await {
                             state = ConnState::InGame { room_id: r_id };
-                        } else if state != ConnState::AwaitingHello && state != ConnState::InQueue {
+                        } else if let Some(r_id) = matchmaker.get_spectator_room(player_id).await {
+                            state = ConnState::Spectating { room_id: r_id };
+                        } else if state != ConnState::AwaitingHello
+                            && state != ConnState::InQueue
+                            && state != ConnState::AwaitingPrivateOpponent
+                        {
                             state = ConnState::Connected;
                         }
 
@@ -293,6 +441,16 @@ pub async fn handle_socket(
                             ClientMessage::Pong { ts } => {
                                 missed_pongs = 0;
                                 let _ = tx.send(ServerMessage::Pong { ts }).await;
+                            }
+                            ClientMessage::CreatePrivateRoom { category, difficulty, duration_secs } => {
+                                state = ConnState::AwaitingPrivateOpponent;
+                                matchmaker.create_private_room(player_id, category, difficulty, duration_secs).await;
+                            }
+                            ClientMessage::JoinPrivateRoom { room_code } => {
+                                matchmaker.join_private_room(player_id, room_code).await;
+                            }
+                            ClientMessage::SpectateRoom { room_code } => {
+                                matchmaker.spectate_room(player_id, room_code).await;
                             }
                         }
                     }

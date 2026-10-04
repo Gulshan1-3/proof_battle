@@ -75,5 +75,7 @@ playwright-report/
 *.log
 logs/
 *.tmp
-.cache/
+# === TLS Certificates ===
+infra/nginx/certs/*.pem
+!infra/nginx/certs/.gitkeep
 

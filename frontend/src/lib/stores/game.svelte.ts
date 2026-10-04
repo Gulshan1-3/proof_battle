@@ -65,6 +65,25 @@ export class GameState {
 	lastCheckVerdict = $state<VerdictResult | null>(null);
 	lastSubmitVerdict = $state<VerdictResult | null>(null);
 	result = $state<MatchResult | null>(null);
+	serverError = $state<{ code: string; message: string } | null>(null);
+
+	// Private room & spectator mode
+	privateRoomCode = $state<string | null>(null);
+	isPrivateRoomHost = $state<boolean>(false);
+	isSpectating = $state<boolean>(false);
+	spectatorState = $state<{
+		roomId: string;
+		roomCode: string | null;
+		player1: PlayerInfo;
+		player2: PlayerInfo;
+		p1Status: OpponentStatus;
+		p2Status: OpponentStatus;
+		problem: Problem;
+		durationMs: number;
+		elapsedMs: number;
+		startsAtMs: number;
+		endsAtMs: number;
+	} | null>(null);
 
 	// Active diagnostics: submit diagnostics have precedence over live check diagnostics.
 	// Implemented as a getter (not $derived) to avoid Svelte 5 class-field rune
@@ -124,6 +143,11 @@ export class GameState {
 		this.lastCheckVerdict = null;
 		this.lastSubmitVerdict = null;
 		this.result = null;
+		this.serverError = null;
+		this.privateRoomCode = null;
+		this.isPrivateRoomHost = false;
+		this.isSpectating = false;
+		this.spectatorState = null;
 	}
 }
 

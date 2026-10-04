@@ -1,6 +1,30 @@
-version: '3.8'
-
 services:
+  server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      BIND_ADDR: 0.0.0.0:3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-proofbattle}:${POSTGRES_PASSWORD:-proofbattle_dev}@postgres:5432/${POSTGRES_DB:-proofbattle}
+      REDIS_URL: redis://redis:6379
+      SANDBOX_ENABLED: "false"
+      LOG_FORMAT: json
+      RUST_LOG: info,proof_battle=debug
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -18,5 +42,35 @@ services:
       timeout: 3s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ../frontend/build:/var/www/html:ro
+    depends_on:
+      server:
+        condition: service_healthy
+
 volumes:
   postgres_data:
+  redis_data:
+  lean_cache:

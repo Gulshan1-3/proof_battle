@@ -347,14 +347,14 @@ async fn test_simultaneous_correct_submits_single_winner() {
     while Instant::now() < timeout && (p1_winners.is_empty() || p2_winners.is_empty()) {
         tokio::select! {
             Some(Ok(m1)) = ws1.next() => {
-                if let Ok(ServerMessage::RoundEnd { outcome: MatchOutcome::Won, winner_id: Some(winner), .. }) =
+                if let Ok(ServerMessage::RoundEnd { winner_id: Some(winner), .. }) =
                     serde_json::from_str(m1.to_text().unwrap())
                 {
                     p1_winners.push(winner);
                 }
             }
             Some(Ok(m2)) = ws2.next() => {
-                if let Ok(ServerMessage::RoundEnd { outcome: MatchOutcome::Won, winner_id: Some(winner), .. }) =
+                if let Ok(ServerMessage::RoundEnd { winner_id: Some(winner), .. }) =
                     serde_json::from_str(m2.to_text().unwrap())
                 {
                     p2_winners.push(winner);

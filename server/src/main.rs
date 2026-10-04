@@ -14,10 +14,17 @@ async fn main() {
         }
     };
 
+    let log_format = std::env::var("LOG_FORMAT").unwrap_or_default();
+    if log_format.eq_ignore_ascii_case("json") {
+        tracing_subscriber::fmt().json().init();
+    } else {
+        tracing_subscriber::fmt().init();
+    }
+
     let app = create_app(config.clone());
 
-    println!("🚀 ProofBattle server running on ws://{}/ws", config.bind_addr);
-    tracing::info!("🚀 Running server on ws://{}/ws", config.bind_addr);
+    println!("ProofBattle server running on ws://{}/ws", config.bind_addr);
+    tracing::info!("Running server on ws://{}/ws", config.bind_addr);
     let listener = match TcpListener::bind(&config.bind_addr).await {
         Ok(l) => l,
         Err(e) => {
