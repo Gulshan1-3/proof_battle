@@ -8,6 +8,7 @@ pub mod message;
 pub mod metrics;
 pub mod utils;
 pub mod ws;
+pub mod telemetry;
 
 use axum::{
     Json, Router,
@@ -419,16 +420,54 @@ pub async fn handle_socket(
                                                 let conf = config.clone();
                                                 let tx_clone = tx.clone();
                                                 tokio::spawn(async move {
-                                                    let (diagnostics, _) = run_check_only(&code, &challenge, &conf, &pool).await;
+                                                    let (diagnostics, _, lean_ms) = run_check_only(&code, &challenge, &conf, &pool).await;
+                                                    let verdict_status = if diagnostics.is_empty() { VerdictStatus::Accepted } else { VerdictStatus::Rejected };
                                                     let _ = tx_clone.send(ServerMessage::Verdict {
                                                         req_id,
-                                                        verdict: if diagnostics.is_empty() { VerdictStatus::Accepted } else { VerdictStatus::Rejected },
+                                                        verdict: verdict_status.clone(),
                                                         reason: None,
                                                         message: "Diagnostic check complete".to_string(),
-                                                        diagnostics,
-                                                        elapsed_ms: 0,
+                                                        diagnostics: diagnostics.clone(),
+                                                        elapsed_ms: lean_ms,
                                                         check_skipped: false,
                                                     }).await;
+
+                                                    if let Some(logger) = crate::telemetry::TelemetryLogger::get() {
+                                                        let now_ms = std::time::SystemTime::now()
+                                                            .duration_since(std::time::UNIX_EPOCH)
+                                                            .map(|d| d.as_millis() as i64)
+                                                            .unwrap_or(0);
+                                                        logger.record(crate::telemetry::AttemptTelemetryRecord {
+                                                            match_id: room_id.to_string(),
+                                                            problem_id: challenge.id.clone(),
+                                                            category: challenge.category.clone(),
+                                                            structural_difficulty: challenge.difficulty,
+                                                            goal: challenge.goal.clone(),
+                                                            imports: challenge.imports.clone(),
+                                                            player_id: player_id.to_string(),
+                                                            username: None,
+                                                            opponent_id: None,
+                                                            attempt_index: 0,
+                                                            intent: "Check".to_string(),
+                                                            tactic: code,
+                                                            verdict: match verdict_status {
+                                                                VerdictStatus::Accepted => "Accepted".to_string(),
+                                                                VerdictStatus::Rejected => "Rejected".to_string(),
+                                                                VerdictStatus::Error => "Error".to_string(),
+                                                            },
+                                                            reject_reason: None,
+                                                            diagnostics,
+                                                            elapsed_ms: lean_ms,
+                                                            lean_ms,
+                                                            queue_wait_ms: 0,
+                                                            time_budget_ms: 0,
+                                                            time_remaining_ms: 0,
+                                                            tokens_generated: None,
+                                                            heartbeats_consumed: None,
+                                                            outcome: None,
+                                                            timestamp_unix_ms: now_ms,
+                                                        });
+                                                    }
                                                 });
                                             }
                                         }

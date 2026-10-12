@@ -3,7 +3,7 @@
   "category": "env",
   "goal": "True",
   "imports": [
-    "import Mathlib"
+    "import Mathlib.NonexistentInvalidModule"
   ],
   "body": "trivial",
   "expect": "reject",

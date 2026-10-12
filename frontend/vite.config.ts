@@ -18,6 +18,11 @@ export default defineConfig(({ mode }) => ({
 	server: {
 		port: 5173,
 		proxy: {
+			'/sim-api': {
+				target: 'http://127.0.0.1:8088',
+				rewrite: (path) => path.replace(/^\/sim-api/, ''),
+				changeOrigin: true
+			},
 			'/ws': {
 				target: 'ws://127.0.0.1:3001',
 				ws: true

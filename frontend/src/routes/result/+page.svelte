@@ -5,14 +5,33 @@
 	import { game, type MatchResult } from '$lib/stores/game.svelte';
 	import { wsClient } from '$lib/ws/client';
 
+	const LONG_PROOF = `intro P Q
+constructor
+· intro h
+  cases h with
+  | inl hp =>
+    apply Or.inr
+    exact hp
+  | inr hq =>
+    apply Or.inl
+    exact hq
+· intro h
+  cases h with
+  | inl hq =>
+    apply Or.inr
+    exact hq
+  | inr hp =>
+    apply Or.inl
+    exact hp`;
+
 	// Default fallback result for direct navigation or preview
 	const result: MatchResult = $derived(
 		game.result || {
 			roomId: 'room-demo',
 			outcome: 'Won',
 			winnerId: 'you',
-			winningProof: 'intro n\nsimp',
-			canonicalProof: 'intro n\nsimp [Nat.add_zero]',
+			winningProof: LONG_PROOF,
+			canonicalProof: LONG_PROOF,
 			eloDelta: 24,
 			durationMs: 42000n,
 			seq: 2n

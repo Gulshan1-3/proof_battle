@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const ARTIFACT_DIR =
-	'/home/gulshansharma/.gemini/antigravity/brain/55900e62-6dd0-4a66-9d63-cbb51624059e';
+const ARTIFACT_DIR = process.env.ARTIFACT_DIR || './screenshots';
 
 test('capture complete application showcase', async ({ page }) => {
 	// Set viewport to 1440x900 for high quality desktop capture

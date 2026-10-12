@@ -15,11 +15,12 @@ import json
 import subprocess
 import tempfile
 import os
-from pathlib import Path
+import shutil
 
-LEAN_DIR = Path("/home/gulshansharma/proof_battle/lean")
-LAKE = "/home/gulshansharma/.elan/bin/lake"
-OUTPUT_FILE = Path("/home/gulshansharma/proof_battle/problems_curated.jsonl")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+LEAN_DIR = REPO_ROOT / "lean"
+LAKE = shutil.which("lake") or "lake"
+OUTPUT_FILE = REPO_ROOT / "problems_curated.jsonl"
 
 # Base template for candidate problems
 RAW_PROBLEMS = []

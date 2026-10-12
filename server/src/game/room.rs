@@ -38,6 +38,7 @@ pub enum RoomCommand {
     VerificationFinished {
         player_id: PlayerId,
         req_id: Option<String>,
+        code: String,
         outcome: Result<crate::lean::VerifyOutcome, RejectReason>,
     },
     AddSpectator {
@@ -220,8 +221,8 @@ impl Room {
                         Some(RoomCommand::SubmitProof { player_id, code, req_id }) => {
                             self.handle_submit(player_id, code, req_id).await;
                         }
-                        Some(RoomCommand::VerificationFinished { player_id, req_id, outcome }) => {
-                            let should_stop = self.handle_verification_finished(player_id, req_id, outcome).await;
+                        Some(RoomCommand::VerificationFinished { player_id, req_id, code, outcome }) => {
+                            let should_stop = self.handle_verification_finished(player_id, req_id, code, outcome).await;
                             if should_stop {
                                 break;
                             }
@@ -313,11 +314,11 @@ impl Room {
             .unwrap_or(0);
 
         let problem = crate::ws::message::Problem {
-            id: format!("problem_{}", self.room_id),
+            id: self.challenge.id.clone(),
             goal: self.challenge.goal.clone(),
             imports: self.challenge.imports.clone(),
-            difficulty: 1,
-            category: "logic".to_string(),
+            difficulty: self.challenge.difficulty,
+            category: self.challenge.category.clone(),
             hint: None,
             duration_ms: self.duration.as_millis() as i64,
         };
@@ -442,6 +443,7 @@ impl Room {
                         .send(RoomCommand::VerificationFinished {
                             player_id,
                             req_id,
+                            code: clean_code.clone(),
                             outcome: Ok(outcome),
                         })
                         .await;
@@ -456,6 +458,7 @@ impl Room {
                 .send(RoomCommand::VerificationFinished {
                     player_id,
                     req_id,
+                    code: clean_code,
                     outcome,
                 })
                 .await;
@@ -466,6 +469,7 @@ impl Room {
         &mut self,
         player_id: PlayerId,
         req_id: Option<String>,
+        code: String,
         result: Result<crate::lean::VerifyOutcome, RejectReason>,
     ) -> bool {
         if player_id == self.player1 {
@@ -496,6 +500,90 @@ impl Room {
             Err(reject_reason) => ("Rejected", Some(reject_reason.as_str()), 0.0),
         };
         crate::metrics::get_metrics().record_verification(v_str, r_str, duration_secs);
+
+        if let Some(logger) = crate::telemetry::TelemetryLogger::get() {
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+            let time_budget_ms = self.duration.as_millis() as i64;
+            let elapsed_since_start = Instant::now().duration_since(self.starts_at).as_millis() as i64;
+            let time_remaining_ms = (time_budget_ms - elapsed_since_start).max(0);
+            let opponent_id = if player_id == self.player1 {
+                Some(self.player2.to_string())
+            } else {
+                Some(self.player1.to_string())
+            };
+            let username = if player_id == self.player1 {
+                self.p1_info.username.clone()
+            } else {
+                self.p2_info.username.clone()
+            };
+            let attempt_index = if player_id == self.player1 {
+                self.submission_count1
+            } else {
+                self.submission_count2
+            };
+
+            let (verdict_str, reject_reason_str, lean_ms, diagnostics) = match &result {
+                Ok(out) => {
+                    let (v, r, diags) = match &out.verdict {
+                        crate::lean::Verdict::Accepted { .. } => ("Accepted", None, vec![]),
+                        crate::lean::Verdict::Rejected { reason, stderr } => {
+                            let d = Diagnostic {
+                                line: 1,
+                                col: 1,
+                                end_line: 1,
+                                end_col: 1,
+                                severity: DiagnosticSeverity::Error,
+                                message: stderr.clone(),
+                            };
+                            ("Rejected", Some(reason.as_str().to_string()), vec![d])
+                        }
+                        crate::lean::Verdict::Error(err) => {
+                            let d = Diagnostic {
+                                line: 1,
+                                col: 1,
+                                end_line: 1,
+                                end_col: 1,
+                                severity: DiagnosticSeverity::Error,
+                                message: err.clone(),
+                            };
+                            ("Error", Some(format!("Internal: {err}")), vec![d])
+                        }
+                    };
+                    (v, r, out.elapsed_ms, diags)
+                }
+                Err(reject_reason) => ("Rejected", Some(reject_reason.as_str().to_string()), 0, vec![]),
+            };
+
+            logger.record(crate::telemetry::AttemptTelemetryRecord {
+                match_id: self.room_id.to_string(),
+                problem_id: self.challenge.id.clone(),
+                category: self.challenge.category.clone(),
+                structural_difficulty: self.challenge.difficulty,
+                goal: self.challenge.goal.clone(),
+                imports: self.challenge.imports.clone(),
+                player_id: player_id.to_string(),
+                username,
+                opponent_id,
+                attempt_index,
+                intent: "Submit".to_string(),
+                tactic: code.clone(),
+                verdict: verdict_str.to_string(),
+                reject_reason: reject_reason_str,
+                diagnostics,
+                elapsed_ms: lean_ms,
+                lean_ms,
+                queue_wait_ms: 0,
+                time_budget_ms,
+                time_remaining_ms,
+                tokens_generated: None,
+                heartbeats_consumed: None,
+                outcome: None,
+                timestamp_unix_ms: now_ms,
+            });
+        }
 
         let outcome = match result {
             Ok(out) => out,
@@ -626,8 +714,8 @@ impl Room {
                         elo_delta_p2: p2_delta,
                         problem_id: self.problem_id,
                         problem_goal: self.challenge.goal.clone(),
-                        problem_category: "logic".to_string(),
-                        problem_difficulty: 1,
+                        problem_category: self.challenge.category.clone(),
+                        problem_difficulty: self.challenge.difficulty,
                         winner_id: Some(winner.0),
                         outcome: if winner == self.player1 {
                             "Won".to_string()
@@ -635,7 +723,11 @@ impl Room {
                             "Lost".to_string()
                         },
                         winning_proof: Some(stdout),
-                        canonical_proof: None,
+                        canonical_proof: if self.challenge.canonical_proof.is_empty() {
+                            None
+                        } else {
+                            Some(self.challenge.canonical_proof.clone())
+                        },
                         rated: !self.is_unrated,
                         duration_ms,
                         created_at: chrono::Utc::now(),
