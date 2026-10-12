@@ -84,7 +84,7 @@ class BDHConfig:
 | **Language Model Head** | Tied with token embeddings | 0 (tied) |
 | **Total Model Parameters** | | **9,906,560** |
 
-This parameter count was formally verified in [`data/clean_minif2f_eval/stage51_audit_report.json`](file:///home/gulshansharma/proof_battle/data/clean_minif2f_eval/stage51_audit_report.json):
+This parameter count was formally verified in `data/clean_minif2f_eval/stage51_audit_report.json`:
 ```json
 {
   "parameter_audit": {

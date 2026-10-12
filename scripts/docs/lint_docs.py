@@ -129,6 +129,14 @@ def lint_file(file_path: Path, headings_cache: Dict[Path, Set[str]]) -> List[str
             # Resolve target path relative to current file's directory
             resolved_target = (file_path.parent / target_path_str).resolve()
 
+            # Skip checking files inside excluded / gitignored directories (e.g. data, infra, lean)
+            try:
+                rel = resolved_target.relative_to(ROOT_DIR)
+                if any(part in EXCLUDE_DIRS for part in rel.parts):
+                    continue
+            except ValueError:
+                pass
+
             if not resolved_target.exists():
                 errors.append(
                     f"{file_path.relative_to(ROOT_DIR)}:{line_idx}: Target file '{target_path_str}' does not exist (resolved to {resolved_target})"

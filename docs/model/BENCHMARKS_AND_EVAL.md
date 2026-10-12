@@ -31,7 +31,7 @@ On the standard **miniF2F test split** (244 formal Lean 4 competition theorems),
 
 A critical question in automated reasoning is whether benchmark solves originate from the learned neural model or from external search heuristics.
 
-Inspection of the per-problem evaluation log ([`data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_results.jsonl`](file:///home/gulshansharma/proof_battle/data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_results.jsonl)) reveals the following distribution:
+Inspection of the per-problem evaluation log (`data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_results.jsonl`) reveals the following distribution:
 
 ### A. Solve Method Breakdown
 
@@ -77,7 +77,7 @@ All 66 solved theorems closed using standard formal decision procedures and tact
 
 All evaluation results are validated using [`scripts/ml/audit_solutions_integrity.py`](file:///home/gulshansharma/proof_battle/scripts/ml/audit_solutions_integrity.py).
 
-The audit output is recorded in [`data/clean_minif2f_eval/stage51_audit_report.json`](file:///home/gulshansharma/proof_battle/data/clean_minif2f_eval/stage51_audit_report.json):
+The audit output is recorded in `data/clean_minif2f_eval/stage51_audit_report.json`:
 
 ```json
 {
@@ -113,7 +113,7 @@ The audit output is recorded in [`data/clean_minif2f_eval/stage51_audit_report.j
 
 ## 4. Evaluation Artifacts on Disk
 
-- Stage 54 Evaluation Summary: [`data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_summary.json`](file:///home/gulshansharma/proof_battle/data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_summary.json)
-- Per-Problem Solved Line Log: [`data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_results.jsonl`](file:///home/gulshansharma/proof_battle/data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_results.jsonl)
-- AIME Evaluation Results: [`data/clean_minif2f_eval/dbf_mcts_stage55_aime_test_test_summary.json`](file:///home/gulshansharma/proof_battle/data/clean_minif2f_eval/dbf_mcts_stage55_aime_test_test_summary.json)
-- Integrity Audit Report: [`data/clean_minif2f_eval/stage51_audit_report.json`](file:///home/gulshansharma/proof_battle/data/clean_minif2f_eval/stage51_audit_report.json)
+- Stage 54 Evaluation Summary: `data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_summary.json`
+- Per-Problem Solved Line Log: `data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_results.jsonl`
+- AIME Evaluation Results: `data/clean_minif2f_eval/dbf_mcts_stage55_aime_test_test_summary.json`
+- Integrity Audit Report: `data/clean_minif2f_eval/stage51_audit_report.json`
