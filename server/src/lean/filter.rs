@@ -470,9 +470,7 @@ fn strip_comments_and_strings(input: &str) -> Result<String, FilterError> {
 }
 
 fn validate_tactic_heads(stripped: &str) -> Result<(), FilterError> {
-    let mut line_num = 1;
-
-    for raw_line in stripped.split('\n') {
+    for (line_num, raw_line) in (1..).zip(stripped.split('\n')) {
         // A single line can contain multiple tactic statements separated by ';'
         let mut col_offset = 1;
         for segment in raw_line.split(';') {
@@ -547,16 +545,13 @@ fn validate_tactic_heads(stripped: &str) -> Result<(), FilterError> {
             }
             col_offset += segment.len() + 1; // +1 for ';'
         }
-        line_num += 1;
     }
 
     Ok(())
 }
 
 fn validate_forbidden_tokens(stripped: &str) -> Result<(), FilterError> {
-    let mut line_num = 1;
-
-    for raw_line in stripped.split('\n') {
+    for (line_num, raw_line) in (1..).zip(stripped.split('\n')) {
         let mut col_num = 1;
         let mut idx = 0;
         let chars: Vec<char> = raw_line.chars().collect();
@@ -607,7 +602,6 @@ fn validate_forbidden_tokens(stripped: &str) -> Result<(), FilterError> {
                 col_num += 1;
             }
         }
-        line_num += 1;
     }
 
     Ok(())

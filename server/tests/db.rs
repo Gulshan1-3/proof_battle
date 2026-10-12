@@ -14,9 +14,49 @@ async fn get_test_pool() -> Option<PgPool> {
     match create_pool(&url).await {
         Ok(pool) => {
             let _ = run_migrations(&pool).await;
+            seed_if_empty(&pool).await;
             Some(pool)
         }
         Err(_) => None,
+    }
+}
+
+async fn seed_if_empty(pool: &PgPool) {
+    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM problems WHERE verified = true")
+        .fetch_one(pool)
+        .await
+        .unwrap_or((0,));
+    if count.0 < 120 {
+        let problems = proof_battle_server::challenges::get_problems();
+        let now = chrono::Utc::now();
+        for p in problems {
+            let slug = if !p.slug.is_empty() {
+                p.slug.clone()
+            } else {
+                p.id.clone()
+            };
+            let diff = p.difficulty as i16;
+            let _ = sqlx::query(
+                r#"
+                INSERT INTO problems (
+                    slug, goal, imports, statement, canonical_proof, difficulty, category,
+                    tactic_hint, verified, verified_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true, $9)
+                ON CONFLICT (slug) DO UPDATE SET verified = true
+                "#,
+            )
+            .bind(&slug)
+            .bind(&p.goal)
+            .bind(&p.imports)
+            .bind(&p.statement)
+            .bind(&p.canonical_proof)
+            .bind(diff)
+            .bind(&p.category)
+            .bind(&p.tactic_hint)
+            .bind(now)
+            .execute(pool)
+            .await;
+        }
     }
 }
 

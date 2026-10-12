@@ -268,7 +268,7 @@ impl HistoryStore {
                 win_rate: cat_win_rate,
             });
         }
-        categories.sort_by(|a, b| b.games_played.cmp(&a.games_played));
+        categories.sort_by_key(|a| std::cmp::Reverse(a.games_played));
 
         PlayerStats {
             player_id,
