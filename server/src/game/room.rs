@@ -507,7 +507,8 @@ impl Room {
                 .map(|d| d.as_millis() as i64)
                 .unwrap_or(0);
             let time_budget_ms = self.duration.as_millis() as i64;
-            let elapsed_since_start = Instant::now().duration_since(self.starts_at).as_millis() as i64;
+            let elapsed_since_start =
+                Instant::now().duration_since(self.starts_at).as_millis() as i64;
             let time_remaining_ms = (time_budget_ms - elapsed_since_start).max(0);
             let opponent_id = if player_id == self.player1 {
                 Some(self.player2.to_string())
@@ -554,7 +555,12 @@ impl Room {
                     };
                     (v, r, out.elapsed_ms, diags)
                 }
-                Err(reject_reason) => ("Rejected", Some(reject_reason.as_str().to_string()), 0, vec![]),
+                Err(reject_reason) => (
+                    "Rejected",
+                    Some(reject_reason.as_str().to_string()),
+                    0,
+                    vec![],
+                ),
             };
 
             logger.record(crate::telemetry::AttemptTelemetryRecord {

@@ -211,7 +211,8 @@ export class MockWebSocket {
 					this.timers.push(checkTimer);
 				} else {
 					this.submitCount++;
-					const isAccepted = code.includes('Or.inr') || code.includes('constructor') || this.submitCount > 1;
+					const isAccepted =
+						code.includes('Or.inr') || code.includes('constructor') || this.submitCount > 1;
 
 					const submitTimer = setTimeout(() => {
 						if (!isAccepted) {

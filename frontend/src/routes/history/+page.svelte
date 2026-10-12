@@ -93,7 +93,8 @@
 	};
 
 	onMount(async () => {
-		const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+		const params =
+			typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
 		const isMock =
 			params?.has('mock') ||
 			(typeof sessionStorage !== 'undefined' && sessionStorage.getItem('proofbattle.mock') === '1');

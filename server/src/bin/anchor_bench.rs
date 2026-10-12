@@ -44,7 +44,8 @@ fn generate_anchor1_candidates(goal: &str) -> Vec<&'static str> {
         || goal.contains("Nat")
     {
         vec!["intro\nomega", "omega", "intro a b\nomega", "intro n\nsimp"]
-    } else if goal.contains('∧') || goal.contains('∨') || goal.contains('¬') || goal.contains('→') {
+    } else if goal.contains('∧') || goal.contains('∨') || goal.contains('¬') || goal.contains('→')
+    {
         vec!["intro\naesop", "aesop", "intro\nconstructor <;> assumption"]
     } else if goal.contains("List") {
         vec!["intro\nsimp", "intro l\ncases l <;> simp"]
@@ -54,12 +55,13 @@ fn generate_anchor1_candidates(goal: &str) -> Vec<&'static str> {
 }
 
 fn generate_anchor2_candidates(goal: &str) -> Vec<&'static str> {
-    let mut list = Vec::new();
-    list.push("rfl");
-    list.push("intro\nrfl");
-    list.push("intro a b\nrfl");
-    list.push("intro\nsimp");
-    list.push("intro n\nsimp");
+    let mut list = vec![
+        "rfl",
+        "intro\nrfl",
+        "intro a b\nrfl",
+        "intro\nsimp",
+        "intro n\nsimp",
+    ];
     if goal.contains('+') || goal.contains('≤') || goal.contains('ℕ') || goal.contains('<') {
         list.push("intro\nomega");
         list.push("intro a b\nomega");
@@ -99,17 +101,14 @@ async fn evaluate_problem(
             let chosen = candidates.choose(rng).unwrap_or(&"simp");
             vec![chosen.to_string()]
         }
-        AnchorType::Anchor2Search => {
-            generate_anchor2_candidates(&challenge.goal)
-                .into_iter()
-                .map(|s| s.to_string())
-                .collect()
-        }
+        AnchorType::Anchor2Search => generate_anchor2_candidates(&challenge.goal)
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect(),
     };
 
-    let mut attempt_idx = 0;
-    for tactic in candidate_tactics {
-        attempt_idx += 1;
+    for (loop_idx, tactic) in candidate_tactics.into_iter().enumerate() {
+        let attempt_idx = (loop_idx + 1) as u32;
         let clean = tactic.trim();
         let wrapped = match lean::wrap_problem(&challenge.imports, &challenge.goal, clean, config) {
             Ok((w, _)) => w,
@@ -169,7 +168,12 @@ async fn evaluate_problem(
                         severity: proof_battle_server::ws::message::DiagnosticSeverity::Error,
                         message: stderr.clone(),
                     };
-                    ("Rejected", Some(reason.as_str().to_string()), outcome.elapsed_ms, vec![d])
+                    (
+                        "Rejected",
+                        Some(reason.as_str().to_string()),
+                        outcome.elapsed_ms,
+                        vec![d],
+                    )
                 }
                 Verdict::Error(e) => {
                     let d = Diagnostic {
@@ -287,40 +291,56 @@ async fn main() {
 
         for (idx, challenge) in active_problems.iter().enumerate() {
             metrics.total += 1;
-            *metrics.category_total.entry(challenge.category.clone()).or_insert(0) += 1;
+            *metrics
+                .category_total
+                .entry(challenge.category.clone())
+                .or_insert(0) += 1;
 
-            let (solved, lean_ms, reason) = evaluate_problem(
-                bot,
-                challenge,
-                &config,
-                &pool,
-                &telemetry,
-                &mut rng,
-            )
-            .await;
+            let (solved, lean_ms, reason) =
+                evaluate_problem(bot, challenge, &config, &pool, &telemetry, &mut rng).await;
 
             if solved {
                 metrics.solved += 1;
                 metrics.solve_times_ms.push(lean_ms);
-                *metrics.category_solved.entry(challenge.category.clone()).or_insert(0) += 1;
+                *metrics
+                    .category_solved
+                    .entry(challenge.category.clone())
+                    .or_insert(0) += 1;
             } else if let Some(r) = reason {
                 *metrics.error_reasons.entry(r).or_insert(0) += 1;
             }
 
             if (idx + 1) % 25 == 0 || idx + 1 == active_problems.len() {
                 let pct = (metrics.solved as f64 / metrics.total as f64) * 100.0;
-                println!("  [{}/{}] Solved: {} ({:.1}%)", idx + 1, active_problems.len(), metrics.solved, pct);
+                println!(
+                    "  [{}/{}] Solved: {} ({:.1}%)",
+                    idx + 1,
+                    active_problems.len(),
+                    metrics.solved,
+                    pct
+                );
             }
         }
 
         let solve_pct = (metrics.solved as f64 / metrics.total as f64) * 100.0;
         let mut times = metrics.solve_times_ms.clone();
         times.sort_unstable();
-        let median_ms = if times.is_empty() { 0 } else { times[times.len() / 2] };
-        let p95_ms = if times.is_empty() { 0 } else { times[(times.len() * 95) / 100] };
+        let median_ms = if times.is_empty() {
+            0
+        } else {
+            times[times.len() / 2]
+        };
+        let p95_ms = if times.is_empty() {
+            0
+        } else {
+            times[(times.len() * 95) / 100]
+        };
 
         println!("\nSummary for {}:", bot.name());
-        println!("  Solve Rate:       {}/{} ({:.2}%)", metrics.solved, metrics.total, solve_pct);
+        println!(
+            "  Solve Rate:       {}/{} ({:.2}%)",
+            metrics.solved, metrics.total, solve_pct
+        );
         println!("  Median Lean Time: {} ms", median_ms);
         println!("  P95 Lean Time:    {} ms", p95_ms);
 
