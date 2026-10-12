@@ -6,9 +6,9 @@ pub mod game;
 pub mod lean;
 pub mod message;
 pub mod metrics;
+pub mod telemetry;
 pub mod utils;
 pub mod ws;
-pub mod telemetry;
 
 use axum::{
     Json, Router,

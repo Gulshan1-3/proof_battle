@@ -67,7 +67,6 @@
 
 	// Formalization State
 	let leanCode = $state('');
-	let theoremStatement = $state('');
 	let goalProp = $state('');
 	let varBinders = $state('');
 	let formalizeMethod = $state('');
@@ -101,7 +100,6 @@
 			const data = await res.json();
 			if (data.success) {
 				leanCode = data.lean_code;
-				theoremStatement = data.statement;
 				goalProp = data.goal;
 				varBinders = data.binders;
 				formalizeMethod = data.method || 'neuro_symbolic';
@@ -176,7 +174,6 @@
 			const data = await res.json();
 			if (data.success) {
 				leanCode = data.lean_code;
-				theoremStatement = data.statement;
 				goalProp = data.goal;
 				varBinders = data.binders;
 				formalizeMethod = data.method || 'neuro_symbolic';
@@ -245,7 +242,10 @@
 		<!-- Section 1: Problem Input -->
 		<section class="rounded-lg border border-[#27272a] bg-[#121215] p-5">
 			<div class="mb-3 flex items-center justify-between">
-				<label for="problem-input" class="text-xs font-semibold tracking-wider text-[#a1a1aa] uppercase">
+				<label
+					for="problem-input"
+					class="text-xs font-semibold tracking-wider text-[#a1a1aa] uppercase"
+				>
 					Input Problem (Natural Language, LaTeX, or Lean 4)
 				</label>
 				<span class="text-xs text-[#71717a]">Press Ctrl+Enter to solve</span>
@@ -254,7 +254,7 @@
 			<!-- Preset Selection Pills -->
 			<div class="mb-3 flex flex-wrap gap-1.5">
 				<span class="py-1 text-xs text-[#71717a]">Presets:</span>
-				{#each PRESETS as preset}
+				{#each PRESETS as preset (preset.label)}
 					<button
 						type="button"
 						onclick={() => selectPreset(preset.text)}
@@ -279,7 +279,9 @@
 			></textarea>
 
 			<!-- Action Controls Bar -->
-			<div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#27272a] pt-4">
+			<div
+				class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#27272a] pt-4"
+			>
 				<div class="flex items-center gap-3">
 					<label for="budget-select" class="text-xs text-[#71717a]">MCTS Simulations:</label>
 					<select
@@ -314,7 +316,9 @@
 			</div>
 
 			{#if autoformalizeError}
-				<div class="mt-3 rounded border border-[#7f1d1d] bg-[#450a0a]/30 p-2.5 text-xs text-[#fca5a5]">
+				<div
+					class="mt-3 rounded border border-[#7f1d1d] bg-[#450a0a]/30 p-2.5 text-xs text-[#fca5a5]"
+				>
 					{autoformalizeError}
 				</div>
 			{/if}
@@ -360,13 +364,16 @@
 		{#if isSolving}
 			<section class="rounded-lg border border-[#27272a] bg-[#121215] p-6 text-center">
 				<div class="inline-flex items-center gap-3">
-					<div class="h-4 w-4 animate-spin rounded-full border-2 border-[#71717a] border-t-[#f4f4f5]"></div>
+					<div
+						class="h-4 w-4 animate-spin rounded-full border-2 border-[#71717a] border-t-[#f4f4f5]"
+					></div>
 					<span class="text-sm font-medium text-[#f4f4f5]">
 						Running ProofBDH 10M Neural MCTS & Mathlib Premise Search...
 					</span>
 				</div>
 				<p class="mt-2 text-xs text-[#71717a]">
-					Evaluating neural candidate priors • Querying 117,911 Mathlib lemmas • Lean 4 REPL verification
+					Evaluating neural candidate priors • Querying 117,911 Mathlib lemmas • Lean 4 REPL
+					verification
 				</p>
 			</section>
 		{/if}
@@ -375,23 +382,29 @@
 		{#if solveResult}
 			<section class="rounded-lg border border-[#27272a] bg-[#121215] p-5">
 				<!-- Status Header -->
-				<div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#27272a] pb-4">
+				<div
+					class="flex flex-wrap items-center justify-between gap-3 border-b border-[#27272a] pb-4"
+				>
 					<div class="flex items-center gap-3">
 						{#if solveResult.solved}
-							<span class="flex h-6 items-center rounded-full border border-[#166534] bg-[#14532d]/40 px-3 text-xs font-semibold text-[#4ade80]">
+							<span
+								class="flex h-6 items-center rounded-full border border-[#166534] bg-[#14532d]/40 px-3 text-xs font-semibold text-[#4ade80]"
+							>
 								PROVEN (Lean 4 Kernel Verified)
 							</span>
 						{:else}
-							<span class="flex h-6 items-center rounded-full border border-[#3f3f46] bg-[#18181b] px-3 text-xs font-semibold text-[#a1a1aa]">
+							<span
+								class="flex h-6 items-center rounded-full border border-[#3f3f46] bg-[#18181b] px-3 text-xs font-semibold text-[#a1a1aa]"
+							>
 								SEARCH EXHAUSTED
 							</span>
 						{/if}
 						<span class="text-xs text-[#71717a]">
-							Method: <strong class="text-[#a1a1aa] font-mono">{solveResult.solve_method}</strong>
+							Method: <strong class="font-mono text-[#a1a1aa]">{solveResult.solve_method}</strong>
 						</span>
 					</div>
 
-					<div class="flex items-center gap-4 text-xs font-mono text-[#71717a]">
+					<div class="flex items-center gap-4 font-mono text-xs text-[#71717a]">
 						<span>Latency: <strong class="text-[#f4f4f5]">{solveResult.latency_ms}ms</strong></span>
 						<span>Depth: <strong class="text-[#f4f4f5]">{solveResult.max_depth}</strong></span>
 						<span>Nodes: <strong class="text-[#f4f4f5]">{solveResult.nodes_expanded}</strong></span>
@@ -411,7 +424,10 @@
 								{copiedCertificate ? 'Copied' : 'Copy Proof Script'}
 							</button>
 						</div>
-						<pre class="overflow-x-auto rounded-md border border-[#27272a] bg-[#09090b] p-3 font-mono text-xs leading-relaxed text-[#f4f4f5]"><code>{solveResult.full_code}</code></pre>
+						<pre
+							class="overflow-x-auto rounded-md border border-[#27272a] bg-[#09090b] p-3 font-mono text-xs leading-relaxed text-[#f4f4f5]"><code
+								>{solveResult.full_code}</code
+							></pre>
 					</div>
 
 					<!-- Kernel Axiom Audit -->
@@ -422,8 +438,8 @@
 						</div>
 						<div class="mt-1 flex flex-wrap gap-1 font-mono text-[11px] text-[#71717a]">
 							<span>Axioms:</span>
-							{#each solveResult.axioms as ax}
-								<span class="rounded bg-[#27272a] px-1.5 py-0.2 text-[#a1a1aa]">{ax}</span>
+							{#each solveResult.axioms as ax, i (i)}
+								<span class="py-0.2 rounded bg-[#27272a] px-1.5 text-[#a1a1aa]">{ax}</span>
 							{/each}
 						</div>
 					</div>
@@ -434,7 +450,8 @@
 							<p class="mt-1 font-mono text-[#71717a]">{solveResult.error}</p>
 						{/if}
 						<p class="mt-2 text-[#71717a]">
-							Tip: Increase MCTS simulations to 64 or add auxiliary intermediate lemmas to guide tree search.
+							Tip: Increase MCTS simulations to 64 or add auxiliary intermediate lemmas to guide
+							tree search.
 						</p>
 					</div>
 				{/if}
@@ -442,10 +459,14 @@
 				<!-- Search Trace Steps -->
 				{#if solveResult.search_trace && solveResult.search_trace.length > 0}
 					<div class="mt-5 border-t border-[#27272a] pt-4">
-						<span class="text-xs font-semibold text-[#71717a] uppercase">Tactic Search Sequence:</span>
+						<span class="text-xs font-semibold text-[#71717a] uppercase"
+							>Tactic Search Sequence:</span
+						>
 						<div class="mt-2 space-y-1.5">
-							{#each solveResult.search_trace as step}
-								<div class="flex items-center justify-between rounded border border-[#27272a] bg-[#09090b] px-3 py-1.5 font-mono text-xs">
+							{#each solveResult.search_trace as step, i (i)}
+								<div
+									class="flex items-center justify-between rounded border border-[#27272a] bg-[#09090b] px-3 py-1.5 font-mono text-xs"
+								>
 									<div class="flex items-center gap-2">
 										<span class="text-[#71717a]">[{step.source}]</span>
 										<span class="text-[#f4f4f5]">{step.tactic}</span>
@@ -467,4 +488,3 @@
 		{/if}
 	</main>
 </div>
-

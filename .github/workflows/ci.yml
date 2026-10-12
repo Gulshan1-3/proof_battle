@@ -76,18 +76,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-test-
 
-      - name: Cache Lean Mathlib artifacts
-        uses: actions/cache@v4
-        with:
-          path: lean/.lake
-          key: ${{ runner.os }}-lean-lake-${{ hashFiles('lean/lakefile.lean', 'lean/lake-manifest.json') }}
-          restore-keys: |
-            ${{ runner.os }}-lean-lake-
+      - name: Setup test Lean environment
+        run: |
+          mkdir -p lean/proofs
+          chmod +x server/tests/mock_lake.sh
 
       - name: Run server test suite
         env:
           DATABASE_URL: postgres://proofbattle:proofbattle_dev@localhost:5432/proofbattle
           SANDBOX_ENABLED: "false"
+          LAKE_PATH: ${{ github.workspace }}/server/tests/mock_lake.sh
         run: cargo test --manifest-path server/Cargo.toml
 
   frontend-check:

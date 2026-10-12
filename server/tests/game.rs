@@ -80,10 +80,11 @@ async fn connect_player(
 
 fn solve_challenge(goal: &str) -> String {
     let problems = proof_battle_server::challenges::get_problems();
-    if let Some(p) = problems.iter().find(|p| p.goal == goal) {
-        if !p.canonical_proof.is_empty() {
-            return p.canonical_proof.clone();
-        }
+    if let Some(p) = problems
+        .iter()
+        .find(|p| p.goal == goal && !p.canonical_proof.is_empty())
+    {
+        return p.canonical_proof.clone();
     }
     if goal.contains("n + 0 = n") {
         "  intro n\n  simp\n".to_string()

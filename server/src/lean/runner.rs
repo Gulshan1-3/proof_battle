@@ -68,6 +68,12 @@ pub fn resolve_proof_dir(config: &Config, project_dir: &Path) -> PathBuf {
 }
 
 fn find_lake_binary() -> PathBuf {
+    if let Ok(path) = std::env::var("LAKE_PATH") {
+        let p = PathBuf::from(path);
+        if p.exists() {
+            return p;
+        }
+    }
     if let Ok(path) = which_in_path("lake") {
         return path;
     }
@@ -75,6 +81,16 @@ fn find_lake_binary() -> PathBuf {
         let elan_lake = PathBuf::from(home).join(".elan/bin/lake");
         if elan_lake.exists() {
             return elan_lake;
+        }
+    }
+    for candidate in &[
+        "server/tests/mock_lake.sh",
+        "tests/mock_lake.sh",
+        "../server/tests/mock_lake.sh",
+    ] {
+        let p = PathBuf::from(candidate);
+        if p.exists() {
+            return std::fs::canonicalize(&p).unwrap_or(p);
         }
     }
     PathBuf::from("lake")

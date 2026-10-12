@@ -82,10 +82,8 @@ struct RawProblemRecord {
 }
 
 pub fn get_problems() -> Vec<ProofChallenge> {
-    if let Some(problems) = load_from_curated_file() {
-        if !problems.is_empty() {
-            return problems;
-        }
+    if let Some(problems) = load_from_curated_file().filter(|p| !p.is_empty()) {
+        return problems;
     }
     fallback_problems()
 }
