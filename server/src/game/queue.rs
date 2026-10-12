@@ -262,7 +262,7 @@ pub async fn run_check_only(
     challenge: &ProofChallenge,
     config: &Config,
     pool: &VerifierPool,
-) -> (Vec<Diagnostic>, bool) {
+) -> (Vec<Diagnostic>, bool, u64) {
     let clean_code = code.lines().map(str::trim).collect::<Vec<_>>().join("\n");
 
     let wrapped = match lean::wrap_problem(&challenge.imports, &challenge.goal, &clean_code, config)
@@ -279,6 +279,7 @@ pub async fn run_check_only(
                     message: format!("Filter error: {err:?}"),
                 }],
                 false,
+                0,
             );
         }
     };
@@ -297,8 +298,9 @@ pub async fn run_check_only(
                 r_str,
                 outcome.elapsed_ms as f64 / 1000.0,
             );
+            let lean_ms = outcome.elapsed_ms;
             match outcome.verdict {
-                Verdict::Accepted { .. } => (vec![], false),
+                Verdict::Accepted { .. } => (vec![], false, lean_ms),
                 Verdict::Rejected { stderr, .. } => {
                     let diag = Diagnostic {
                         line: 1,
@@ -308,7 +310,7 @@ pub async fn run_check_only(
                         severity: DiagnosticSeverity::Error,
                         message: stderr,
                     };
-                    (vec![diag], false)
+                    (vec![diag], false, lean_ms)
                 }
                 Verdict::Error(e) => {
                     let diag = Diagnostic {
@@ -319,13 +321,13 @@ pub async fn run_check_only(
                         severity: DiagnosticSeverity::Error,
                         message: e,
                     };
-                    (vec![diag], false)
+                    (vec![diag], false, lean_ms)
                 }
             }
         }
         None => {
             // Check lane full -> check skipped silently
-            (vec![], true)
+            (vec![], true, 0)
         }
     }
 }

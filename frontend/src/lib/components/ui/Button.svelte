@@ -35,11 +35,11 @@
 
 	const variantStyles = {
 		primary:
-			'bg-[var(--accent)] hover:bg-[var(--accent-bright)] text-white border border-[rgba(255,255,255,0.1)] active:scale-[0.98] shadow-sm',
+			'bg-[var(--accent)] hover:bg-[var(--accent-bright)] text-[#f4f4f5] border border-[#3f3f46] active:scale-[0.98]',
 		secondary:
 			'bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--bg-border)] active:scale-[0.98]',
 		ghost:
-			'bg-transparent hover:bg-[rgba(255,255,255,0.06)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+			'bg-transparent hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
 		danger:
 			'bg-[var(--error)] hover:opacity-90 text-white border border-[rgba(0,0,0,0.2)] active:scale-[0.98]'
 	};

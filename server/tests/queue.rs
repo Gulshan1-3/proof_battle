@@ -101,10 +101,10 @@ async fn test_lane_isolation_saturating_check_lane_does_not_block_submit_lane() 
     assert_eq!(metrics.available_submit_permits, 2);
     assert_eq!(metrics.available_check_permits, 1);
 
-    let challenge = ProofChallenge {
-        goal: "∀ n : ℕ, n + 0 = n".to_string(),
-        imports: vec!["import Mathlib.Data.Nat.Basic".to_string()],
-    };
+    let challenge = ProofChallenge::new(
+        "∀ n : ℕ, n + 0 = n",
+        vec!["import Mathlib.Data.Nat.Basic".to_string()],
+    );
     let wrapped = proof_battle_server::lean::wrap_problem(
         &challenge.imports,
         &challenge.goal,
@@ -123,10 +123,10 @@ async fn test_check_storm_concurrent_diagnostic_execution() {
     let config = make_test_config();
     // submit_capacity = 2, check_capacity = 2
     let pool = Arc::new(VerifierPool::new(2, 2, Duration::from_secs(2)));
-    let challenge = ProofChallenge {
-        goal: "∀ n : ℕ, n + 0 = n".to_string(),
-        imports: vec!["import Mathlib.Data.Nat.Basic".to_string()],
-    };
+    let challenge = ProofChallenge::new(
+        "∀ n : ℕ, n + 0 = n",
+        vec!["import Mathlib.Data.Nat.Basic".to_string()],
+    );
 
     let mut handles = Vec::new();
 
@@ -145,7 +145,7 @@ async fn test_check_storm_concurrent_diagnostic_execution() {
     let mut executed_count = 0;
     let mut skipped_count = 0;
     for h in handles {
-        let (_diagnostics, skipped) = h.await.expect("task completed without panic");
+        let (_diagnostics, skipped, _elapsed) = h.await.expect("task completed without panic");
         if skipped {
             skipped_count += 1;
         } else {

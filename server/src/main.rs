@@ -21,6 +21,7 @@ async fn main() {
         tracing_subscriber::fmt().init();
     }
 
+    proof_battle_server::telemetry::TelemetryLogger::init(None);
     let app = create_app(config.clone());
 
     println!("ProofBattle server running on ws://{}/ws", config.bind_addr);

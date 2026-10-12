@@ -5,6 +5,10 @@ frontend/docs/
 lean/docs/
 
 # === Large Assets & Toolchains ===
+infra/
+scripts/
+data/
+export/
 infra/sandbox/toolchain/
 **/toolchain/
 rootfs/
@@ -76,6 +80,8 @@ playwright-report/
 logs/
 *.tmp
 recordings_raw/
+telemetry_attempts.jsonl
+server/telemetry_attempts.jsonl
 # === TLS Certificates ===
 infra/nginx/certs/*.pem
 !infra/nginx/certs/.gitkeep

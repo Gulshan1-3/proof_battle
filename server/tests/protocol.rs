@@ -29,15 +29,21 @@ async fn spawn_test_server() -> (String, Arc<Config>) {
     (ws_url, config)
 }
 
-fn solve_challenge(goal: &str) -> &'static str {
+fn solve_challenge(goal: &str) -> String {
+    let problems = proof_battle_server::challenges::get_problems();
+    if let Some(p) = problems.iter().find(|p| p.goal == goal) {
+        if !p.canonical_proof.is_empty() {
+            return p.canonical_proof.clone();
+        }
+    }
     if goal.contains("n + 0 = n") {
-        "  intro n\n  simp\n"
+        "  intro n\n  simp\n".to_string()
     } else if goal.contains("a + b = b + a") {
-        "  intro a b\n  omega\n"
+        "  intro a b\n  omega\n".to_string()
     } else if goal.contains("P ∧ Q") {
-        "  intro P Q ⟨hp, hq⟩\n  exact ⟨hq, hp⟩\n"
+        "  intro P Q ⟨hp, hq⟩\n  exact ⟨hq, hp⟩\n".to_string()
     } else {
-        "  simp\n"
+        "  simp\n".to_string()
     }
 }
 

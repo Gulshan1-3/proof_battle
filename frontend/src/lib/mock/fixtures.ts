@@ -3,11 +3,11 @@ import type { Problem } from '$lib/ws/generated';
 export const MOCK_PROBLEMS: Problem[] = [
 	{
 		id: 'mock-prob-1',
-		goal: '∀ n : ℕ, n + 0 = n',
-		imports: ['import Mathlib.Data.Nat.Basic'],
-		difficulty: 1,
-		category: 'arithmetic',
-		hint: 'Try simp or rfl',
+		goal: '∀ (P Q : Prop), P ∨ Q ↔ Q ∨ P',
+		imports: ['import Mathlib.Logic.Basic'],
+		difficulty: 2,
+		category: 'logic',
+		hint: 'Use constructor, then cases on hypothesis',
 		duration_ms: 300_000n
 	},
 	{

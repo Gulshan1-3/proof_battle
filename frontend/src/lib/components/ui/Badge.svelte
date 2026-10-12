@@ -20,7 +20,7 @@
 			'bg-[rgba(251,191,36,0.12)] text-[var(--warning)] border border-[rgba(251,191,36,0.3)]',
 		info: 'bg-[rgba(96,165,250,0.12)] text-[var(--info)] border border-[rgba(96,165,250,0.3)]',
 		accent:
-			'bg-[var(--accent-dim)] text-[var(--accent-bright)] border border-[rgba(124,106,247,0.3)]'
+			'bg-[var(--accent-dim)] text-[var(--accent-bright)] border border-[var(--bg-border)]'
 	};
 
 	const sizeStyles = {

@@ -210,12 +210,11 @@ export class MockWebSocket {
 					}, 350);
 					this.timers.push(checkTimer);
 				} else {
-					// Submit intent: reject once, then accept
 					this.submitCount++;
-					const isFirst = this.submitCount === 1;
+					const isAccepted = code.includes('Or.inr') || code.includes('constructor') || this.submitCount > 1;
 
 					const submitTimer = setTimeout(() => {
-						if (isFirst) {
+						if (!isAccepted) {
 							const rejectVerdict: ServerMessage = {
 								type: 'Verdict',
 								req_id,
@@ -256,7 +255,24 @@ export class MockWebSocket {
 								outcome: 'Won',
 								winner_id: 'mock-player-1',
 								winning_proof: code,
-								canonical_proof: 'intro n\nsimp',
+								canonical_proof: `intro P Q
+constructor
+· intro h
+  cases h with
+  | inl hp =>
+    apply Or.inr
+    exact hp
+  | inr hq =>
+    apply Or.inl
+    exact hq
+· intro h
+  cases h with
+  | inl hq =>
+    apply Or.inr
+    exact hq
+  | inr hp =>
+    apply Or.inl
+    exact hp`,
 								elo_delta: 24,
 								duration_ms: 45_000n,
 								seq: 2n

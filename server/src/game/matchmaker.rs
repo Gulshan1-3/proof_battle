@@ -742,10 +742,7 @@ impl Matchmaker {
         let challenge = challenges
             .choose(&mut rng)
             .cloned()
-            .unwrap_or_else(|| ProofChallenge {
-                goal: "∀ n : ℕ, n + 0 = n".to_string(),
-                imports: vec!["import Mathlib.Data.Nat.Basic".to_string()],
-            });
+            .unwrap_or_else(ProofChallenge::default);
 
         let duration = match duration_secs {
             Some(secs) => Duration::from_secs(secs.clamp(60, 1800) as u64),
@@ -807,11 +804,11 @@ impl Matchmaker {
             .unwrap_or(0);
 
         let problem = crate::ws::message::Problem {
-            id: format!("problem_{}", room_id),
+            id: challenge.id.clone(),
             goal: challenge.goal.clone(),
             imports: challenge.imports.clone(),
-            difficulty: difficulty.unwrap_or(1),
-            category: category.unwrap_or_else(|| "logic".to_string()),
+            difficulty: difficulty.unwrap_or(challenge.difficulty),
+            category: category.unwrap_or_else(|| challenge.category.clone()),
             hint: None,
             duration_ms,
         };

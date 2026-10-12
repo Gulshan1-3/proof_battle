@@ -13,7 +13,7 @@
 	import { wsClient } from '$lib/ws/client';
 	import { MockWebSocket } from '$lib/mock/server';
 
-	let tacticCode = $state('intro n\nsimp');
+	let tacticCode = $state('intro P Q');
 	let showHint = $state(false);
 	let showResultModal = $state(false);
 	interface EditorMethods {
