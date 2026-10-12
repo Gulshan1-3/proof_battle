@@ -2,10 +2,12 @@
 
 ProofBattle is a real-time competitive platform for formal mathematics. Two players receive identical mathematical propositions and race to construct machine-checked proofs in Lean 4. There is no partial credit, no heuristic evaluation, and no subjective review. If Lean accepts the proof without unproven axioms or compiler downgrades, the theorem is verified.
 
-A solo sandbox mode is also provided, allowing players to practice against an automated solver bot.
+A solo sandbox mode is also provided, allowing players to practice against an automated solver bot powered by our custom 9.9M neural prover (**ProofBDH** + **DBF-MCTS**).
 
-If you are new to writing proofs in Lean 4, read the practical guide:
-- [Lean 4 Proof Guide](learn/README.md)
+### Documentation & Guides
+- 📖 [Central Documentation Hub](docs/README.md): Architecture, specs, models, and runbooks.
+- 🔬 [AI Prover & Reasoning System](docs/model/README.md): ProofBDH architecture, MCTS search, and miniF2F benchmarks.
+- 🎓 [Lean 4 Proof Guide](learn/README.md): Practical tactic guide for competitors (`intro`, `simp`, `ring`, `linarith`, `omega`, `aesop`).
 
 ---
 
@@ -154,10 +156,12 @@ proof_battle/
 ├── README.md                # Project documentation
 ├── learn/                   # Lean 4 proof writing tutorial
 │   └── README.md
-├── docs/                    # Technical designs, protocols, and architecture specs
-│   ├── PROTOCOL.md          # WebSocket protocol specification
-│   ├── ANTI_CHEAT.md        # Security threat model and defenses
-│   └── LOCAL_SETUP.md       # Detailed local environment setup
+├── docs/                    # Central documentation system
+│   ├── README.md            # Documentation index and persona reading paths
+│   ├── model/               # 9.9M neural prover & DBF-MCTS architecture
+│   ├── platform/            # Rust backend, SvelteKit, WebSocket wire protocol
+│   ├── runbooks/            # Local setup, challenge authoring, benchmarking, CI
+│   └── DECISIONS.md         # Architectural Decision Records (ADR-001 to ADR-012)
 ├── screenshots/             # UI walkthrough captures
 ├── server/                  # Rust backend service
 │   ├── Cargo.toml
