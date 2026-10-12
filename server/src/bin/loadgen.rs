@@ -45,41 +45,31 @@ fn parse_args() -> LoadgenConfig {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--url" => {
-                if i + 1 < args.len() {
-                    config.url = args[i + 1].clone();
-                    i += 1;
-                }
+            "--url" if i + 1 < args.len() => {
+                config.url = args[i + 1].clone();
+                i += 1;
             }
-            "--clients" | "-c" => {
-                if i + 1 < args.len() {
-                    if let Ok(c) = args[i + 1].parse() {
-                        config.clients = c;
-                    }
-                    i += 1;
+            "--clients" | "-c" if i + 1 < args.len() => {
+                if let Ok(c) = args[i + 1].parse() {
+                    config.clients = c;
                 }
+                i += 1;
             }
-            "--games" | "-n" => {
-                if i + 1 < args.len() {
-                    if let Ok(g) = args[i + 1].parse() {
-                        config.games = g;
-                    }
-                    i += 1;
+            "--games" | "-n" if i + 1 < args.len() => {
+                if let Ok(g) = args[i + 1].parse() {
+                    config.games = g;
                 }
+                i += 1;
             }
-            "--mode" | "-m" => {
-                if i + 1 < args.len() {
-                    config.mode = args[i + 1].clone();
-                    i += 1;
-                }
+            "--mode" | "-m" if i + 1 < args.len() => {
+                config.mode = args[i + 1].clone();
+                i += 1;
             }
-            "--timeout" | "-t" => {
-                if i + 1 < args.len() {
-                    if let Ok(t) = args[i + 1].parse() {
-                        config.timeout_secs = t;
-                    }
-                    i += 1;
+            "--timeout" | "-t" if i + 1 < args.len() => {
+                if let Ok(t) = args[i + 1].parse() {
+                    config.timeout_secs = t;
                 }
+                i += 1;
             }
             _ => {}
         }
