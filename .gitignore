@@ -1,12 +1,7 @@
-# === Documentation & Prompts (Internal Specs) ===
-docs/
-*/docs/
-frontend/docs/
-lean/docs/
-
 # === Large Assets & Toolchains ===
 infra/
-scripts/
+scripts/*
+!scripts/docs/
 data/
 export/
 infra/sandbox/toolchain/

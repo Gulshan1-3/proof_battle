@@ -40,6 +40,9 @@ jobs:
       - name: Run Clippy static analysis
         run: cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings
 
+      - name: Check Documentation Links
+        run: python3 scripts/docs/lint_docs.py
+
   backend-test:
     name: Backend Test Suite
     runs-on: ubuntu-latest

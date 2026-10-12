@@ -2,6 +2,8 @@
 
 This guide covers the fundamentals of writing tactic proofs in Lean 4. It is written specifically for the problems you encounter in ProofBattle challenges.
 
+> For system architecture, protocols, and the 9.9M neural prover (`ProofBDH`), see the [Documentation Hub](../docs/README.md).
+
 ---
 
 ## 1. How Proofs Work in ProofBattle

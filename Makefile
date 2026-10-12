@@ -1,4 +1,4 @@
-.PHONY: bootstrap verify-harness run-server env-report fmt clippy test codegen db-up db-down db-reset migrate seed
+.PHONY: bootstrap verify-harness run-server env-report fmt clippy test codegen db-up db-down db-reset migrate seed docs-check
 
 bootstrap:
 	@cargo check --manifest-path server/Cargo.toml
@@ -43,4 +43,7 @@ seed:
 	DATABASE_URL="postgres://proofbattle:proofbattle_dev@localhost:5432/proofbattle" \
 	  TARGET_VERIFIED=120 VERIFY_CONCURRENCY=8 \
 	  cargo run --manifest-path server/Cargo.toml --bin verify_problems
+
+docs-check:
+	@python3 scripts/docs/lint_docs.py
 
