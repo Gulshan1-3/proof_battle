@@ -10,6 +10,7 @@ Key Objectives:
 """
 
 import os
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 import sys
 import json
 import time
@@ -109,7 +110,9 @@ def load_and_tokenize(
 def evaluate_val_loss(
     model: ProofBDH,
     val_loader: DataLoader,
-    device: torch.device
+    device: torch.device,
+    use_amp: bool = False,
+    amp_dtype: torch.dtype = torch.float16
 ) -> float:
     """Computes cross-entropy loss over validation dataset."""
     model.eval()
@@ -123,9 +126,10 @@ def evaluate_val_loss(
             input_ids = input_ids.to(device)
             targets = targets.to(device)
 
-            out = model(input_ids)
-            logits = out[0] if isinstance(out, tuple) else out
-            loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
+            with torch.amp.autocast('cuda', dtype=amp_dtype, enabled=use_amp):
+                out = model(input_ids)
+                logits = out[0] if isinstance(out, tuple) else out
+                loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
 
             valid_mask = (targets != -100)
             num_valid = valid_mask.sum().item()
@@ -138,20 +142,30 @@ def evaluate_val_loss(
 
 
 def train_curriculum(
+    tier: str = "10m",
     epochs: int = 6,
-    batch_size: int = 16,
+    batch_size: Optional[int] = None,
+    grad_accum_steps: int = 1,
     lr: float = 2.0e-4,
     patience: int = 3,
     max_seq_len: int = 512,
     device_name: Optional[str] = None
 ):
+    tier = tier.lower().strip()
+    if batch_size is None:
+        batch_size = 2 if tier == "95m" else 16
+    if tier == "95m" and grad_accum_steps == 1:
+        grad_accum_steps = 4
+
     if device_name is None:
         device_name = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device_name)
 
     print("=" * 80)
-    print("STAGE 55: MULTI-STEP CURRICULUM TRAINING FOR PROOFBDH")
-    print(f"Device: {device} | Batch Size: {batch_size} | LR: {lr} | Max Seq Len: {max_seq_len}")
+    print(f"STAGE 55: MULTI-STEP CURRICULUM TRAINING FOR PROOFBDH [TIER: {tier.upper()}]")
+    effective_bsz = batch_size * grad_accum_steps
+    print(f"Device: {device} | Micro-Batch: {batch_size} | Grad Accum: {grad_accum_steps} (Effective: {effective_bsz}) | LR: {lr}")
+    print(f"Max Seq Len: {max_seq_len} | Patience: {patience}")
     print("=" * 80)
 
     tokenizer = ProofTokenizer(str(VOCAB_PATH))
@@ -179,32 +193,49 @@ def train_curriculum(
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    # 2. Initialize Model
-    # Use existing best checkpoint if present, or init fresh ProofBDH
-    stage52_ckpt = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage52_best.pt"
-    if stage52_ckpt.exists():
-        print(f"Initializing from Stage 52 checkpoint: {stage52_ckpt.name}")
-        model = ProofBDH.load_checkpoint(str(stage52_ckpt), device=device_name)
+    # 2. Tier Checkpoint and Parameter Resolution
+    if tier == "95m":
+        best_checkpoint = CHECKPOINT_DIR / "bdh_95m_curriculum_best.pt"
+        progress_file = CHECKPOINT_DIR / "curriculum_95m_progress.json"
+        max_params = 100_000_000
+        if best_checkpoint.exists():
+            print(f"Resuming from existing BDH-95M checkpoint: {best_checkpoint.name}")
+            model = ProofBDH.load_checkpoint(str(best_checkpoint), device=device_name)
+        else:
+            print("Initializing fresh BDH-95M architecture (dim=768, n_layers=10, n_heads=12, hidden_dim=3072)...")
+            cfg = BDHConfig.from_preset("95m", vocab_size=len(tokenizer.vocab), max_seq_len=max_seq_len)
+            model = ProofBDH(cfg)
     else:
-        cfg = BDHConfig(vocab_size=len(tokenizer.vocab), max_seq_len=max_seq_len)
-        model = ProofBDH(cfg)
+        best_checkpoint = CHECKPOINT_DIR / "bdh_9m_curriculum_best.pt"
+        progress_file = CHECKPOINT_DIR / "curriculum_training_progress.json"
+        max_params = 10_000_000
+        stage52_ckpt = CHECKPOINT_DIR / "bdh_9m_stage52_best.pt"
+        if stage52_ckpt.exists():
+            print(f"Initializing from Stage 52 checkpoint: {stage52_ckpt.name}")
+            model = ProofBDH.load_checkpoint(str(stage52_ckpt), device=device_name)
+        else:
+            cfg = BDHConfig.from_preset("10m", vocab_size=len(tokenizer.vocab), max_seq_len=max_seq_len)
+            model = ProofBDH(cfg)
 
     model.to(device)
     param_count = model.count_parameters()
-    print(f"Total Parameters: {param_count:,} (Constraint <= 10,000,000: {param_count <= 10000000})")
-    assert param_count <= 10000000, f"Parameter budget exceeded: {param_count} > 10,000,000"
+    print(f"Total Parameters: {param_count:,} (Constraint <= {max_params:,}: {param_count <= max_params})")
+    assert param_count <= max_params, f"Parameter budget exceeded: {param_count} > {max_params}"
 
     # 3. Setup Optimization
     optimizer = AdamW(model.parameters(), lr=lr, weight_decay=0.01, betas=(0.9, 0.98))
-    scheduler = CosineAnnealingLR(optimizer, T_max=epochs * len(train_loader), eta_min=1.0e-5)
+    scheduler = CosineAnnealingLR(optimizer, T_max=epochs * (len(train_loader) // grad_accum_steps), eta_min=1.0e-5)
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
+
+    use_amp = (device.type == "cuda")
+    amp_dtype = torch.bfloat16 if (use_amp and torch.cuda.is_bf16_supported()) else torch.float16
 
     best_val_loss = float("inf")
     epochs_no_improve = 0
     t0 = time.time()
 
     # Initial Validation Evaluation
-    init_val_loss = evaluate_val_loss(model, val_loader, device)
+    init_val_loss = evaluate_val_loss(model, val_loader, device, use_amp=use_amp, amp_dtype=amp_dtype)
     best_val_loss = init_val_loss
     print(f"Baseline Validation Loss: {init_val_loss:.4f} (Perplexity: {math.exp(min(20, init_val_loss)):.2f})\n")
 
@@ -213,34 +244,39 @@ def train_curriculum(
         model.train()
         total_epoch_loss = 0.0
         steps = 0
+        optimizer.zero_grad()
 
         for step, (input_ids, targets) in enumerate(train_loader, 1):
             input_ids = input_ids.to(device)
             targets = targets.to(device)
 
-            optimizer.zero_grad()
-            out = model(input_ids)
-            logits = out[0] if isinstance(out, tuple) else out
-            loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
+            with torch.amp.autocast('cuda', dtype=amp_dtype, enabled=use_amp):
+                out = model(input_ids)
+                logits = out[0] if isinstance(out, tuple) else out
+                loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
+                loss_scaled = loss / grad_accum_steps
 
             if torch.isnan(loss) or torch.isinf(loss):
                 print(f"[WARN] Non-finite loss encountered at epoch {epoch}, step {step}. Skipping.")
                 continue
 
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
-            optimizer.step()
-            scheduler.step()
+            loss_scaled.backward()
+
+            if step % grad_accum_steps == 0 or step == len(train_loader):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=0.5)
+                optimizer.step()
+                optimizer.zero_grad()
+                scheduler.step()
 
             total_epoch_loss += loss.item()
             steps += 1
 
-            if step % 100 == 0 or step == len(train_loader):
+            if step % (50 * grad_accum_steps) == 0 or step == len(train_loader):
                 curr_lr = scheduler.get_last_lr()[0]
                 print(f"Epoch {epoch:02d}/{epochs:02d} | Step {step:04d}/{len(train_loader)} | Train Loss: {loss.item():.4f} | LR: {curr_lr:.2e}", flush=True)
 
         # Validation Check at End of Epoch
-        val_loss = evaluate_val_loss(model, val_loader, device)
+        val_loss = evaluate_val_loss(model, val_loader, device, use_amp=use_amp, amp_dtype=amp_dtype)
         val_ppl = math.exp(min(20, val_loss))
         avg_train_loss = total_epoch_loss / max(1, steps)
 
@@ -248,10 +284,10 @@ def train_curriculum(
 
         # Early Stopping Logic
         if val_loss < best_val_loss - 1e-4:
-            print(f"     [NEW BEST] Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving checkpoint.", flush=True)
+            print(f"     [NEW BEST] Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving checkpoint to {best_checkpoint.name}.", flush=True)
             best_val_loss = val_loss
             epochs_no_improve = 0
-            model.save_checkpoint(str(BEST_CHECKPOINT))
+            model.save_checkpoint(str(best_checkpoint))
         else:
             epochs_no_improve += 1
             print(f"     [PATIENCE] No improvement for {epochs_no_improve}/{patience} epoch(s).", flush=True)
@@ -261,6 +297,7 @@ def train_curriculum(
 
         # Record Progress
         progress = {
+            "tier": tier,
             "epoch": epoch,
             "best_val_loss": round(best_val_loss, 4),
             "last_val_loss": round(val_loss, 4),
@@ -268,7 +305,7 @@ def train_curriculum(
             "elapsed_minutes": round((time.time() - t0) / 60.0, 2),
             "last_updated": time.strftime("%Y-%m-%d %H:%M:%S")
         }
-        with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+        with open(progress_file, "w", encoding="utf-8") as f:
             json.dump(progress, f, indent=2)
 
     print(f"\nTraining completed in {(time.time() - t0) / 60.0:.1f} minutes. Best Val Loss: {best_val_loss:.4f}")
@@ -276,8 +313,10 @@ def train_curriculum(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Multi-Step Curriculum Trainer for ProofBDH")
+    parser.add_argument("--tier", type=str, default="10m", choices=["10m", "95m"], help="Model tier: 10m baseline or 95m scale")
     parser.add_argument("--epochs", type=int, default=6)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--batch-size", type=int, default=None, help="Batch size (defaults to 16 for 10m, 4 for 95m)")
+    parser.add_argument("--grad-accum", type=int, default=1, help="Gradient accumulation steps")
     parser.add_argument("--lr", type=float, default=2.0e-4)
     parser.add_argument("--patience", type=int, default=3)
     parser.add_argument("--max-seq-len", type=int, default=512)
@@ -285,8 +324,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     train_curriculum(
+        tier=args.tier,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        grad_accum_steps=args.grad_accum,
         lr=args.lr,
         patience=args.patience,
         max_seq_len=args.max_seq_len,

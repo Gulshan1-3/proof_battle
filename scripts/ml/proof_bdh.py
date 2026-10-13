@@ -99,6 +99,44 @@ class BDHConfig:
             # Strictly sub-10M parameter budget (9,906,560 parameters)
             self.hidden_dim = 800
 
+    @classmethod
+    def from_preset(
+        cls,
+        preset: str = "10m",
+        vocab_size: int = 1600,
+        max_seq_len: int = 512,
+        **kwargs
+    ) -> "BDHConfig":
+        """
+        Dual-tier architecture preset factory:
+        - '10m': 9,938,560 parameters (dim=320, n_layers=8, n_heads=8, hidden_dim=800)
+        - '95m': 95,617,408 parameters (dim=768, n_layers=10, n_heads=12, hidden_dim=3072)
+        """
+        p = preset.lower().strip()
+        if p in ("10m", "10", "baseline"):
+            cfg_dict = dict(
+                vocab_size=vocab_size,
+                dim=320,
+                n_layers=8,
+                n_heads=8,
+                hidden_dim=800,
+                max_seq_len=max_seq_len,
+            )
+        elif p in ("95m", "95", "100m", "frontier"):
+            cfg_dict = dict(
+                vocab_size=vocab_size,
+                dim=768,
+                n_layers=10,
+                n_heads=12,
+                hidden_dim=3072,
+                max_seq_len=max_seq_len,
+            )
+        else:
+            raise ValueError(f"Unknown BDH preset '{preset}'. Expected '10m' or '95m'.")
+
+        cfg_dict.update(kwargs)
+        return cls(**cfg_dict)
+
 
 
 class BDHSynapticAttention(nn.Module):

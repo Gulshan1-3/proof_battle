@@ -54,6 +54,7 @@ def get_current_rss_gb() -> Tuple[float, float]:
 
 
 def evaluate_split(
+    tier: str = "10m",
     split_filter: str = "test",
     comp_filter: Optional[str] = None,
     simulations_budget: int = 32,
@@ -65,8 +66,12 @@ def evaluate_split(
     checkpoint_path: Optional[str] = None,
     vocab_path: Optional[str] = None
 ):
+    tier = tier.lower().strip()
+    if checkpoint_path is None and tier == "95m":
+        checkpoint_path = str(DATA_DIR / "native_prover" / "checkpoints" / "bdh_95m_curriculum_best.pt")
+
     print("=" * 80)
-    tag_str = f" [TAG: {tag}]" if tag else ""
+    tag_str = f" [TAG: {tag}] [TIER: {tier.upper()}]" if tag else f" [TIER: {tier.upper()}]"
     print(f"STAGE 50: DBF-MCTS BENCHMARK EVALUATION (SPLIT: {split_filter.upper()}){tag_str}")
     if comp_filter:
         print(f"Competition Filter: {comp_filter}")
@@ -238,6 +243,7 @@ def evaluate_split(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate DBF-MCTS on miniF2F")
+    parser.add_argument("--tier", type=str, default="10m", choices=["10m", "95m"], help="Model tier: 10m baseline or 95m scale")
     parser.add_argument("--split", type=str, default="test", choices=["valid", "test", "all"])
     parser.add_argument("--filter", type=str, default=None, help="Filter by competition or problem substring (e.g. aime, imo)")
     parser.add_argument("--simulations", type=int, default=32)
@@ -252,6 +258,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     evaluate_split(
+        tier=args.tier,
         split_filter=args.split,
         comp_filter=args.filter,
         simulations_budget=args.simulations,

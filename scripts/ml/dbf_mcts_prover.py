@@ -213,9 +213,14 @@ class DBFMCTSProver:
         self.model = ProofBDH.load_checkpoint(checkpoint_path, device=device)
         self.model.eval()
 
-        # Enforce strict parameter budget compliance (strictly <= 10M)
+        # Enforce tier-based parameter budget compliance (10M baseline or 100M frontier)
         params = self.model.count_parameters()
-        assert params <= 10000000, f"Integrity error: parameter count {params} exceeds 10,000,000"
+        if params <= 10_000_000:
+            self.tier = "10m"
+        elif params <= 100_000_000:
+            self.tier = "95m"
+        else:
+            raise AssertionError(f"Integrity error: parameter count {params:,} exceeds 100,000,000 frontier budget")
 
         self.gen_lock = threading.Lock()
         self.eos_id = self.tokenizer.vocab.get("<qed>")
