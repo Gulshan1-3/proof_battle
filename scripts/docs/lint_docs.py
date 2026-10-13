@@ -126,8 +126,12 @@ def lint_file(file_path: Path, headings_cache: Dict[Path, Set[str]]) -> List[str
                         )
                 continue
 
-            # Resolve target path relative to current file's directory
-            resolved_target = (file_path.parent / target_path_str).resolve()
+            # Resolve target path
+            if target_path_str.startswith("/") and "/proof_battle/" in target_path_str:
+                target_path_str = target_path_str.split("/proof_battle/", 1)[1]
+                resolved_target = (ROOT_DIR / target_path_str).resolve()
+            else:
+                resolved_target = (file_path.parent / target_path_str).resolve()
 
             # Skip checking files inside excluded / gitignored directories (e.g. data, infra, lean)
             try:

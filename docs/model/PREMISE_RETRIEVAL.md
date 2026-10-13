@@ -1,6 +1,6 @@
 # BM25 Mathlib Premise Retriever
 
-The premise retrieval subsystem in [`scripts/ml/premise_retriever.py`](file:///home/gulshansharma/proof_battle/scripts/ml/premise_retriever.py) provides sub-5ms semantic retrieval over formal mathematical lemmas in Lean 4's Mathlib library without adding neural parameters.
+The premise retrieval subsystem in [`scripts/ml/premise_retriever.py`](../../scripts/ml/premise_retriever.py) provides sub-5ms semantic retrieval over formal mathematical lemmas in Lean 4's Mathlib library without adding neural parameters.
 
 ---
 
@@ -67,6 +67,6 @@ Retrieved premises are used in two ways:
 
 ## 5. Code References
 
-- Implementation: [`scripts/ml/premise_retriever.py`](file:///home/gulshansharma/proof_battle/scripts/ml/premise_retriever.py)
+- Implementation: [`scripts/ml/premise_retriever.py`](../../scripts/ml/premise_retriever.py)
 - Competition Lemma Dataset: `data/mathlib_competition_lemmas.jsonl`
 - Precomputed Index Cache: `data/native_prover/bm25_premise_index.pkl`

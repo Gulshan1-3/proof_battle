@@ -99,7 +99,7 @@ This parameter count was formally verified in `data/clean_minif2f_eval/stage51_a
 
 ## 3. Training & Inference Execution Modes
 
-ProofBDH supports dual execution modes implemented in [`scripts/ml/proof_bdh.py`](file:///home/gulshansharma/proof_battle/scripts/ml/proof_bdh.py):
+ProofBDH supports dual execution modes implemented in [`scripts/ml/proof_bdh.py`](../../scripts/ml/proof_bdh.py):
 
 ### 1. Vectorized Parallel Mode (Training)
 When training on full sequences, token interactions are computed in parallel using a causal decay tensor mask:
@@ -115,6 +115,6 @@ During autoregressive generation and tree search, tokens are generated one at a 
 
 ## 4. Code References
 
-- Implementation: [`scripts/ml/proof_bdh.py`](file:///home/gulshansharma/proof_battle/scripts/ml/proof_bdh.py)
-- Tokenizer: [`scripts/ml/proof_tokenizer.py`](file:///home/gulshansharma/proof_battle/scripts/ml/proof_tokenizer.py)
-- Search Integration: [`scripts/ml/dbf_mcts_prover.py`](file:///home/gulshansharma/proof_battle/scripts/ml/dbf_mcts_prover.py)
+- Implementation: [`scripts/ml/proof_bdh.py`](../../scripts/ml/proof_bdh.py)
+- Tokenizer: [`scripts/ml/proof_tokenizer.py`](../../scripts/ml/proof_tokenizer.py)
+- Search Integration: [`scripts/ml/dbf_mcts_prover.py`](../../scripts/ml/dbf_mcts_prover.py)

@@ -1,6 +1,6 @@
 # Runbook: CI/CD Pipeline Architecture & Maintenance
 
-This runbook documents the GitHub Actions Continuous Integration (CI) pipeline configured in [`.github/workflows/ci.yml`](file:///home/gulshansharma/proof_battle/.github/workflows/ci.yml).
+This runbook documents the GitHub Actions Continuous Integration (CI) pipeline configured in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 
 ---
 
@@ -30,8 +30,8 @@ The CI pipeline runs automatically on pull requests and pushes to `main` and `ar
 
 ### A. The Lightweight Mock Lake Runner (`mock_lake.sh`)
 - **The Problem**: Running full Lean 4 Mathlib builds in GitHub Actions requires downloading and building 3+ GiB of `.olean` object files, slowing CI to 15+ minutes and causing out-of-disk failures.
-- **The Solution**: We created [`server/tests/mock_lake.sh`](file:///home/gulshansharma/proof_battle/server/tests/mock_lake.sh), a lightweight deterministic shell runner that simulates Lean 4 verification responses.
-- **Environment Hook**: In [`server/src/lean/runner.rs`](file:///home/gulshansharma/proof_battle/server/src/lean/runner.rs), `find_lake_binary()` inspects the `LAKE_PATH` environment variable before looking for system Lake:
+- **The Solution**: We created [`server/tests/mock_lake.sh`](../../server/tests/mock_lake.sh), a lightweight deterministic shell runner that simulates Lean 4 verification responses.
+- **Environment Hook**: In [`server/src/lean/runner.rs`](../../server/src/lean/runner.rs), `find_lake_binary()` inspects the `LAKE_PATH` environment variable before looking for system Lake:
   ```yaml
   env:
     LAKE_PATH: ${{ github.workspace }}/server/tests/mock_lake.sh
@@ -40,7 +40,7 @@ The CI pipeline runs automatically on pull requests and pushes to `main` and `ar
 
 ### B. Fresh Database Auto-Seeding in CI
 - In CI, the `postgres:15-alpine` service container launches empty with 0 rows.
-- Tests expecting problem catalogs automatically call `seed_if_empty()` in [`server/tests/db.rs`](file:///home/gulshansharma/proof_battle/server/tests/db.rs), seeding the 120+ standard problems into the test database on startup.
+- Tests expecting problem catalogs automatically call `seed_if_empty()` in [`server/tests/db.rs`](../../server/tests/db.rs), seeding the 120+ standard problems into the test database on startup.
 
 ---
 

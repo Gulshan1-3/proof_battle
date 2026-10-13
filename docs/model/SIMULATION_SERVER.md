@@ -1,6 +1,6 @@
 # Real-Time AI Prover Simulation Server
 
-The simulation server in [`scripts/ml/simulation_server.py`](file:///home/gulshansharma/proof_battle/scripts/ml/simulation_server.py) provides high-concurrency HTTP API services on port 8088 to power automated solver bots, solo practice arenas, and batch theorem evaluation.
+The simulation server in [`scripts/ml/simulation_server.py`](../../scripts/ml/simulation_server.py) provides high-concurrency HTTP API services on port 8088 to power automated solver bots, solo practice arenas, and batch theorem evaluation.
 
 ---
 
@@ -129,5 +129,5 @@ nohup python3 scripts/ml/simulation_server.py --port 8088 > /tmp/sim_server.log 
 
 ## 4. Code References
 
-- Server Implementation: [`scripts/ml/simulation_server.py`](file:///home/gulshansharma/proof_battle/scripts/ml/simulation_server.py)
-- Prover Engine: [`scripts/ml/dbf_mcts_prover.py`](file:///home/gulshansharma/proof_battle/scripts/ml/dbf_mcts_prover.py)
+- Server Implementation: [`scripts/ml/simulation_server.py`](../../scripts/ml/simulation_server.py)
+- Prover Engine: [`scripts/ml/dbf_mcts_prover.py`](../../scripts/ml/dbf_mcts_prover.py)
