@@ -85,7 +85,11 @@ def evaluate_split(
         probs = all_probs
 
     if comp_filter:
-        probs = [p for p in probs if comp_filter.lower() in p.get("competition", "").lower() or comp_filter.lower() in p.get("problem_id", "").lower()]
+        filters = [f.strip().lower() for f in comp_filter.split(",") if f.strip()]
+        probs = [
+            p for p in probs
+            if any(f in p.get("competition", "").lower() or f in p.get("problem_id", "").lower() for f in filters)
+        ]
 
     tag_prefix = f"{tag}_" if tag else ""
     out_results = OUT_DIR / f"dbf_mcts_{tag_prefix}{split_filter}_results.jsonl"

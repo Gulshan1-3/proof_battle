@@ -431,6 +431,15 @@ class DBFMCTSProver:
         if not node.tactic and not node.accumulated_script:
             return 0.05
 
+        # 0. Fast-path check: For 1-step candidates directly under root, test verify_script
+        if node.parent is not None and node.parent.node_id == "root" and self.repl_client is not None:
+            ok, lat, err = self.repl_client.verify_script(raw_code, node.accumulated_script)
+            if ok:
+                node.is_solved = True
+                node.is_terminal = True
+                node.latency_ms = lat
+                return 1.0
+
         # 1. Interactive REPL step when parent has active proof_state_id
         if (
             self.repl_client is not None
