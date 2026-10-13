@@ -133,9 +133,12 @@ def lint_file(file_path: Path, headings_cache: Dict[Path, Set[str]]) -> List[str
             else:
                 resolved_target = (file_path.parent / target_path_str).resolve()
 
-            # Skip checking files inside excluded / gitignored directories (e.g. data, infra, lean)
+            # Skip checking files inside excluded / gitignored directories (e.g. data, infra, lean, scripts/ml)
             try:
                 rel = resolved_target.relative_to(ROOT_DIR)
+                rel_str = str(rel).replace("\\", "/")
+                if any(rel_str.startswith(prefix) for prefix in ("data", "infra", "lean", "scripts/ml", "ml")):
+                    continue
                 if any(part in EXCLUDE_DIRS for part in rel.parts):
                     continue
             except ValueError:
