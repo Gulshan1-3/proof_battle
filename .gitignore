@@ -2,6 +2,10 @@
 infra/
 scripts/*
 !scripts/docs/
+!scripts/ml/
+scripts/ml/__pycache__/
+__pycache__/
+*.pyc
 data/
 export/
 infra/sandbox/toolchain/

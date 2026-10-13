@@ -15,7 +15,8 @@ Explore the neural architecture, search algorithms, and empirical benchmarks:
 3. [Diagnostic Best-First MCTS](model/DBF_MCTS.md): PUCT search, length-normalized BFS priors, in-tree compiler diagnostic self-repair.
 4. [BM25 Premise Retriever](model/PREMISE_RETRIEVAL.md): Parameter-free inverted index over 102k Mathlib competition lemmas.
 5. [Benchmarks & Integrity Audits](model/BENCHMARKS_AND_EVAL.md): miniF2F 27.05% test results, ablations, and zero-contamination audits.
-6. [Simulation Server](model/SIMULATION_SERVER.md): High-concurrency HTTP API for 512+ battle arenas.
+6. [Technical Audit & Defense](model/AUDIT.md): Empirical answers to reviewer inquiries on Pass@k, contamination, and tactic selection.
+7. [Simulation Server](model/SIMULATION_SERVER.md): High-concurrency HTTP API for 512+ battle arenas.
 
 ### 🦀 For Backend Engineers
 Explore the real-time game server, actor concurrency, and persistence:
@@ -59,6 +60,7 @@ docs/
 │   ├── LEAN_REPL_PIPELINE.md             # Persistent Lean 4 REPL & Subprocess Sandbox
 │   ├── AUTOFORMALIZATION.md              # Neuro-Symbolic LaTeX/NL to Lean 4 Translator
 │   ├── BENCHMARKS_AND_EVAL.md            # miniF2F Results (27.05%), Ablations & Audits
+│   ├── AUDIT.md                          # Technical Audit & Empirical Defense (Pass@k, Contamination)
 │   └── SIMULATION_SERVER.md              # Simulation HTTP API & Concurrency Model
 │
 ├── platform/                             # ProofBattle Competitive Platform

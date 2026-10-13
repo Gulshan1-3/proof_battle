@@ -117,3 +117,4 @@ The audit output is recorded in `data/clean_minif2f_eval/stage51_audit_report.js
 - Per-Problem Solved Line Log: `data/clean_minif2f_eval/dbf_mcts_stage54_multistep_test_results.jsonl`
 - AIME Evaluation Results: `data/clean_minif2f_eval/dbf_mcts_stage55_aime_test_test_summary.json`
 - Integrity Audit Report: `data/clean_minif2f_eval/stage51_audit_report.json`
+- Comprehensive Auditor Review & Q&A Defense: [AUDIT.md](AUDIT.md)
