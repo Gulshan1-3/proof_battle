@@ -88,7 +88,7 @@ def load_and_tokenize(
                     continue
                 try:
                     record = json.loads(line)
-                    text = record.get("text", "")
+                    text = record.get("text") or record.get("formatted_trace") or ""
                     if not text or text in seen:
                         continue
                     seen.add(text)
@@ -123,7 +123,8 @@ def evaluate_val_loss(
             input_ids = input_ids.to(device)
             targets = targets.to(device)
 
-            logits = model(input_ids)
+            out = model(input_ids)
+            logits = out[0] if isinstance(out, tuple) else out
             loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
 
             valid_mask = (targets != -100)
@@ -218,7 +219,8 @@ def train_curriculum(
             targets = targets.to(device)
 
             optimizer.zero_grad()
-            logits = model(input_ids)
+            out = model(input_ids)
+            logits = out[0] if isinstance(out, tuple) else out
             loss = criterion(logits.view(-1, logits.size(-1)), targets.view(-1))
 
             if torch.isnan(loss) or torch.isinf(loss):
@@ -235,26 +237,26 @@ def train_curriculum(
 
             if step % 100 == 0 or step == len(train_loader):
                 curr_lr = scheduler.get_last_lr()[0]
-                print(f"Epoch {epoch:02d}/{epochs:02d} | Step {step:04d}/{len(train_loader)} | Train Loss: {loss.item():.4f} | LR: {curr_lr:.2e}")
+                print(f"Epoch {epoch:02d}/{epochs:02d} | Step {step:04d}/{len(train_loader)} | Train Loss: {loss.item():.4f} | LR: {curr_lr:.2e}", flush=True)
 
         # Validation Check at End of Epoch
         val_loss = evaluate_val_loss(model, val_loader, device)
         val_ppl = math.exp(min(20, val_loss))
         avg_train_loss = total_epoch_loss / max(1, steps)
 
-        print(f"\n---> Epoch {epoch:02d} Summary: Train Loss: {avg_train_loss:.4f} | Val Loss: {val_loss:.4f} (PPL: {val_ppl:.2f})")
+        print(f"\n---> Epoch {epoch:02d} Summary: Train Loss: {avg_train_loss:.4f} | Val Loss: {val_loss:.4f} (PPL: {val_ppl:.2f})", flush=True)
 
         # Early Stopping Logic
         if val_loss < best_val_loss - 1e-4:
-            print(f"     [NEW BEST] Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving checkpoint.")
+            print(f"     [NEW BEST] Validation loss improved from {best_val_loss:.4f} to {val_loss:.4f}. Saving checkpoint.", flush=True)
             best_val_loss = val_loss
             epochs_no_improve = 0
             model.save_checkpoint(str(BEST_CHECKPOINT))
         else:
             epochs_no_improve += 1
-            print(f"     [PATIENCE] No improvement for {epochs_no_improve}/{patience} epoch(s).")
+            print(f"     [PATIENCE] No improvement for {epochs_no_improve}/{patience} epoch(s).", flush=True)
             if epochs_no_improve >= patience:
-                print(f"\n[EARLY STOPPING] Validation loss stopped improving. Halting training to prevent overfitting.")
+                print(f"\n[EARLY STOPPING] Validation loss stopped improving. Halting training to prevent overfitting.", flush=True)
                 break
 
         # Record Progress

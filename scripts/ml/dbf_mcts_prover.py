@@ -47,11 +47,12 @@ except ImportError:
     PremiseRetriever = None
 
 DATA_DIR = ROOT_DIR / "data"
+CURRICULUM_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_curriculum_best.pt"
 STAGE52_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage52_best.pt"
 STAGE51_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage51.pt"
 MULTISTEP_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_multistep.pt"
 CLEAN_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_clean.pt"
-CHECKPOINT_PATH = STAGE52_CKPT if STAGE52_CKPT.exists() else (STAGE51_CKPT if STAGE51_CKPT.exists() else (MULTISTEP_CKPT if MULTISTEP_CKPT.exists() else CLEAN_CKPT))
+CHECKPOINT_PATH = CURRICULUM_CKPT if CURRICULUM_CKPT.exists() else (STAGE52_CKPT if STAGE52_CKPT.exists() else (STAGE51_CKPT if STAGE51_CKPT.exists() else (MULTISTEP_CKPT if MULTISTEP_CKPT.exists() else CLEAN_CKPT)))
 VOCAB_PATH = DATA_DIR / "native_prover" / "vocab.json"
 
 
