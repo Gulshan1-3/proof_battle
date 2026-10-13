@@ -5,9 +5,9 @@ ProofBattle is a real-time competitive platform for formal mathematics. Two play
 A solo sandbox mode is also provided, allowing players to practice against an automated solver bot powered by our custom 9.9M neural prover (**ProofBDH** + **DBF-MCTS**).
 
 ### Documentation & Guides
-- 📖 [Central Documentation Hub](docs/README.md): Architecture, specs, models, and runbooks.
-- 🔬 [AI Prover & Reasoning System](docs/model/README.md): ProofBDH architecture, MCTS search, and miniF2F benchmarks.
-- 🎓 [Lean 4 Proof Guide](learn/README.md): Practical tactic guide for competitors (`intro`, `simp`, `ring`, `linarith`, `omega`, `aesop`).
+-  [Central Documentation Hub](docs/README.md): Architecture, specs, models, and runbooks.
+-  [AI Prover & Reasoning System](docs/model/README.md): ProofBDH architecture, MCTS search, and miniF2F benchmarks.
+-  [Lean 4 Proof Guide](learn/README.md): Practical tactic guide for competitors (`intro`, `simp`, `ring`, `linarith`, `omega`, `aesop`).
 
 ---
 
