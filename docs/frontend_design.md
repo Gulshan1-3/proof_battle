@@ -190,7 +190,7 @@ The aesthetic should feel like a **dark math terminal meets a competitive esport
 │         └──────────────────────────────────┘               │
 │                                                             │
 │         ┌──────────────┐  ┌──────────────┐                 │
-│         │  ⚔️  Play Now  │  │  📚 Practice  │                 │
+│         │  Play Now    │  │  Practice    │                 │
 │         └──────────────┘  └──────────────┘                 │
 │                                                             │
 │    ──────────────────────────────────────────               │
@@ -220,23 +220,23 @@ The aesthetic should feel like a **dark math terminal meets a competitive esport
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ ⊢ ProofBattle   gulshan (1024) ──── vs ──── opponent (1087) │
-│                          ⏱ 07:23                            │
+│                          [07:23]                            │
 ├───────────────────┬──────────────────────┬───────────────────┤
 │                   │                      │                   │
 │   PROBLEM         │   YOUR PROOF         │   BATTLE STATUS   │
 │   ───────         │   ─────────          │   ────────────    │
 │                   │                      │                   │
-│   Difficulty: ★★☆ │  1  theorem goal :   │  YOU              │
-│   Category: Logic │  2    ∀ n : ℕ,      │  ✏️ Editing        │
+│   Difficulty: 2/3 │  1  theorem goal :   │  YOU              │
+│   Category: Logic │  2    ∀ n : ℕ,      │  Editing          │
 │                   │  3      n + 0 = n := │                   │
 │   Prove:          │  4    by             │  OPPONENT         │
-│                   │  5    intro n ▌      │  ✏️ Typing...      │
+│                   │  5    intro n ▌      │  Typing...        │
 │   ∀ n : ℕ,        │                      │                   │
 │     n + 0 = n     │                      │  ─────────────    │
 │                   │  ┌────────────────┐  │                   │
-│   (KaTeX render)  │  │ ⚠ Line 5:      │  │  Submissions      │
-│                   │  │ unknown tactic │  │  You:      2 ❌   │
-│   💡 Hint         │  └────────────────┘  │  Opponent: 1 ❌   │
+│   (KaTeX render)  │  │ Line 5:        │  │  Submissions      │
+│                   │  │ unknown tactic │  │  You:      2 fails│
+│   Hint            │  └────────────────┘  │  Opponent: 1 fail │
 │   simp, omega     │                      │                   │
 │                   │  [ Submit Proof ]    │                   │
 │                   │                      │                   │
@@ -248,7 +248,7 @@ The aesthetic should feel like a **dark math terminal meets a competitive esport
 ```
 ┌─────────────────────────────┐
 │                             │
-│   🏆  YOU WIN!              │
+│   YOU WIN!                  │
 │                             │
 │   Time: 2m 14s              │
 │   ELO:  +24  (now 1048)     │
@@ -277,10 +277,10 @@ The aesthetic should feel like a **dark math terminal meets a competitive esport
 
 | Option | Pros | Cons | Decision |
 |---|---|---|---|
-| `<textarea>` | Zero deps | No syntax highlighting, no LSP, unusable | ❌ Rejected |
-| CodeMirror 6 | Lightweight (50KB), modular | Lean support community-built, less polish | ⚠️ Viable |
-| Monaco Editor | VS Code engine, mature, excellent LSP protocol support, Lean extension already exists in VSCode | 4MB bundle (lazy loaded) | ✅ **Chosen** |
-| Lean4 Web | Full Lean in browser via WASM | 150MB+ WASM download, kills mobile, extremely slow | ❌ Rejected for multiplayer |
+| `<textarea>` | Zero deps | No syntax highlighting, no LSP, unusable | Rejected |
+| CodeMirror 6 | Lightweight (50KB), modular | Lean support community-built, less polish | Viable alternative |
+| Monaco Editor | VS Code engine, mature, excellent LSP protocol support, Lean extension already exists in VSCode | 4MB bundle (lazy loaded) | **Chosen** |
+| Lean4 Web | Full Lean in browser via WASM | 150MB+ WASM download, kills mobile, extremely slow | Rejected for multiplayer |
 
 **Monaco is the correct answer** because:
 1. Players already know it from VS Code + lean4 extension
@@ -719,7 +719,7 @@ This is the orchestrator. It owns the WebSocket and distributes events to child 
     <span class="status-label">Problem</span>
     <div class="difficulty">
       {#each stars as filled}
-        <span class="star" class:filled>★</span>
+        <span class="star" class:filled>*</span>
       {/each}
     </div>
   </div>
@@ -738,7 +738,7 @@ This is the orchestrator. It owns the WebSocket and distributes events to child 
 
   <div class="hint-section">
     <button class="hint-toggle" on:click={() => showHint = !showHint}>
-      💡 {showHint ? 'Hide hint' : 'Show hint'}
+      {showHint ? 'Hide hint' : 'Show hint'}
     </button>
     {#if showHint}
       <p class="hint-text" transition:slide={{ duration: 200 }}>
@@ -942,7 +942,7 @@ export type ClientMessage =
   | { type: 'JoinQueue' }
   | { type: 'SubmitProof'; code: string }
   | { type: 'Ping' };
-  // ❌ No player_id from client — server knows who you are
+  // Note: No player_id from client — server knows who you are
 
 // ── Server → Client ─────────────────────────────────────────
 export type ServerMessage =
@@ -1165,9 +1165,9 @@ Monaco is ~4MB. Never block the initial page render on it.
   {#if submitting}
     <Spinner size={16} /> Verifying with Lean...
   {:else if lastResult === 'success'}
-    ✅ Proof accepted!
+    Proof accepted!
   {:else if lastResult === 'error'}
-    ❌ Try again
+    Try again
   {:else}
     Submit Proof ⟶
   {/if}
@@ -1201,7 +1201,7 @@ Monaco is ~4MB. Never block the initial page render on it.
 </script>
 
 <div class="timer" class:urgent class:critical>
-  ⏱ {minutes}:{String(secs).padStart(2, '0')}
+  {minutes}:{String(secs).padStart(2, '0')}
 </div>
 
 <style>

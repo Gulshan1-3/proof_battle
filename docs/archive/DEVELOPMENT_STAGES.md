@@ -1691,7 +1691,7 @@ TASK
 DO NOT
 - Do not import a UI kit (no shadcn, no Melt UI, no Flowbite). The design doc specifies a custom visual
   language; a kit would fight it and bloat the bundle.
-- Do not add an icon library. The design doc's ASCII art uses ★ ⏱ 💡 🏆; replace them with 16px inline
+- Do not add an icon library. The design doc's ASCII art references star, timer, hint, and trophy icons; replace them with 16px inline
   SVGs for visual consistency and note this as a deliberate deviation in the report.
 - Do not build the game screens yet.
 

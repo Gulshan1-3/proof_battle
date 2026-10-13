@@ -63,7 +63,7 @@ The system is engineered to operate under strict resource constraints ($\le 10,0
 
 | Component | Module | Description |
 | :--- | :--- | :--- |
-| **ProofBDH Architecture** | [`scripts/ml/proof_bdh.py`](../../scripts/ml/proof_bdh.py) | 9,906,560-parameter post-Transformer neural model with Hebbian fast-weight synaptic plasticity ($O(1)$ memory). |
+| **ProofBDH Architecture** | [`scripts/ml/proof_bdh.py`](../../scripts/ml/proof_bdh.py) | 9,906,560-parameter neural model with recurrent fast-weight synaptic plasticity ($O(1)$ memory). |
 | **DBF-MCTS Prover** | [`scripts/ml/dbf_mcts_prover.py`](../../scripts/ml/dbf_mcts_prover.py) | Diagnostic Best-First Monte Carlo Tree Search unifying PUCT exploration, length-normalized BFS priors, and compiler diagnostic self-repair. |
 | **BM25 Premise Retriever** | [`scripts/ml/premise_retriever.py`](../../scripts/ml/premise_retriever.py) | Parameter-free inverted index indexing 102,278 Mathlib competition lemmas with sub-5ms query latency. |
 | **Lean 4 REPL Client** | [`scripts/ml/lean_repl_client.py`](../../scripts/ml/lean_repl_client.py) | Subprocess client maintaining Mathlib resident in RAM for sub-30ms headless proof verification. |
@@ -76,11 +76,11 @@ The system is engineered to operate under strict resource constraints ($\le 10,0
 
 ## Detailed Specifications
 
-- [ProofBDH Architecture Deep-Dive](PROOF_BDH.md)
+- [ProofBDH Architecture](PROOF_BDH.md)
 - [Diagnostic Best-First MCTS & PUCT Search](DBF_MCTS.md)
 - [BM25 Mathlib Premise Retriever](PREMISE_RETRIEVAL.md)
 - [Persistent Lean 4 REPL & Subprocess Sandbox](LEAN_REPL_PIPELINE.md)
 - [Autoformalization Engine](AUTOFORMALIZATION.md)
 - [Benchmark Results & Integrity Audits](BENCHMARKS_AND_EVAL.md)
-- [Comprehensive Technical Audit & Empirical Defense](AUDIT.md)
+- [Technical Audit Report](AUDIT.md)
 - [Simulation Server & HTTP API](SIMULATION_SERVER.md)

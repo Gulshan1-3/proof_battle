@@ -1309,11 +1309,11 @@ pub fn detect_collusion(player_a: PlayerId, player_b: PlayerId, match_history: &
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ Detection Pipeline Status                                │
-│ ├─ Real-time detector: ✅ 99.8% uptime (24h)           │
-│ ├─ Batch analyzer: ✅ Last run: 2h ago (0 errors)      │
-│ ├─ ML model inference: ✅ 45ms avg latency              │
-│ ├─ Review queue: ⚠️  23 items (SLA: <100)              │
-│ └─ Alert system: ✅ No active incidents                 │
+│ ├─ Real-time detector: [OK] 99.8% uptime (24h)          │
+│ ├─ Batch analyzer: [OK] Last run: 2h ago (0 errors)     │
+│ ├─ ML model inference: [OK] 45ms avg latency             │
+│ ├─ Review queue: [WARN] 23 items (SLA: <100)            │
+│ └─ Alert system: [OK] No active incidents                │
 ├─────────────────────────────────────────────────────────┤
 │ Detection Metrics (Last 24h)                            │
 │ ├─ Submissions analyzed: 12,847                         │
@@ -1324,7 +1324,7 @@ pub fn detect_collusion(player_a: PlayerId, player_b: PlayerId, match_history: &
 ├─────────────────────────────────────────────────────────┤
 │ System Health                                            │
 │ ├─ Database latency: 8ms (p95)                         │
-│ ├─ Redis connection: ✅ 99.9%                           │
+│ ├─ Redis connection: [OK] 99.9%                          │
 │ ├─ Lean worker pool: 8/12 active                        │
 │ └─ Audit log throughput: 1.2k events/sec                 │
 └─────────────────────────────────────────────────────────┘
@@ -1352,19 +1352,19 @@ pub fn detect_collusion(player_a: PlayerId, player_b: PlayerId, match_history: &
 ### Daily Health Report (Slack #security-ops)
 
 ```
-📊 Anti-Cheat Daily Summary - 2026-09-27
+Anti-Cheat Daily Summary - 2026-09-27
 
-Detection Pipeline: ✅ Operational
+Detection Pipeline: [OK] Operational
 - Real-time: 99.8% uptime, 12,847 submissions processed
 - Batch: Completed successfully, 3 suspicious accounts flagged
 - ML Model: Precision 87.2%, Recall 92.1% (within targets)
 
-Review Queue: ✅ Healthy
+Review Queue: [OK] Healthy
 - Backlog: 23 items (avg resolution: 6.2h)
 - Appeals: 4 received, 2 approved (false positive), 2 denied
 
 Incidents: None
-⚠️  Watchlist: 2 accounts showing elevated AI-assistance signals
+[WARN] Watchlist: 2 accounts showing elevated AI-assistance signals
 
 Team on-call: @security-lead
 Next ML retraining: 2026-10-15
@@ -1409,7 +1409,7 @@ async fn health_check() -> SystemHealth {
 }
 ```
 
-**Monthly Deep Dive:**
+**Monthly Operational Review:**
 - Full false positive/negative analysis
 - ML model feature importance review
 - New cheat technique research

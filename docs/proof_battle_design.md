@@ -19,7 +19,7 @@
 
 ## 1. What Is Wrong Right Now
 
-### 🔴 Critical Issues
+### Critical Issues
 
 #### 1.1 — Lean is Invoked as a Blocking Subprocess on the Async Runtime
 
@@ -186,7 +186,7 @@ Rooms in `mm.rooms` and `mm.match_states` are created but **never removed** afte
 
 ```mermaid
 flowchart TD
-    subgraph OFFLINE["⚙️ Offline Pipeline (Scheduled Job)"]
+    subgraph OFFLINE["Offline Pipeline (Scheduled Job)"]
         ML["Mathlib4 Repository\n(GitHub / local clone)"]
         PA["Proof Analyzer\n(Rust CLI / Python script)"]
         DB[("PostgreSQL\nProblems DB")]
@@ -194,19 +194,19 @@ flowchart TD
         PA -->|Categorize by:\n- difficulty\n- topic\n- tactic used| DB
     end
 
-    subgraph CLIENT["🖥️ Client Browser"]
+    subgraph CLIENT["Client Browser"]
         P1["Player 1\nLean Editor"]
         P2["Player 2\nLean Editor"]
     end
 
-    subgraph SERVER["🦀 Rust Axum Server"]
+    subgraph SERVER["Rust Axum Server"]
         WS["WebSocket Handler\n/ws"]
         MM["Matchmaker\n(in-memory)"]
         PS["Problem Selector\n(by ELO bracket)"]
         LQ["Lean Job Queue\n(tokio mpsc channel)"]
     end
 
-    subgraph LEAN_WORKERS["🔬 Lean Worker Pool (Isolated)"]
+    subgraph LEAN_WORKERS["Lean Worker Pool (Isolated)"]
         W1["Worker 1\n(Docker container)"]
         W2["Worker 2\n(Docker container)"]
         W3["Worker 3\n(Docker container)"]
@@ -599,20 +599,20 @@ impl Matchmaker {
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  🏆 ProofBattle          [Timer: 4:32]    👤 You vs opponent │
+│  ProofBattle            [Timer: 4:32]       You vs opponent │
 ├───────────────────┬─────────────────────┬───────────────────┤
 │                   │                     │                   │
-│  📜 PROBLEM       │  📝 YOUR EDITOR     │  📊 LIVE STATUS   │
+│  PROBLEM          │  YOUR EDITOR        │  LIVE STATUS      │
 │                   │                     │                   │
-│  Prove:           │  theorem goal :     │  YOU             │
-│  ∀ n : ℕ,        │    ∀ n : ℕ,        │  ⏳ Checking...   │
+│  Prove:           │  theorem goal :     │  YOU              │
+│  ∀ n : ℕ,         │    ∀ n : ℕ,         │  Checking...      │
 │    n + 0 = n      │      n + 0 = n := by│                   │
 │                   │    intro n          │  OPPONENT         │
-│  Difficulty: ★☆☆  │    simp ▌           │  ✏️ Typing...     │
+│  Difficulty: 1/3  │    simp             │  Typing...        │
 │                   │                     │                   │
-│  💡 Hint:         │  ┌──────────────┐  │  ─────────────   │
-│  Try `simp`       │  │ ✅ No errors  │  │  ⚡ 2 submissions  │
-│  or `omega`       │  └──────────────┘  │  both failed      │
+│  Hint:            │  ┌──────────────┐   │  ─────────────    │
+│  Try `simp`       │  │ No errors    │   │  2 submissions    │
+│  or `omega`       │  └──────────────┘   │  both failed      │
 │                   │                     │                   │
 │                   │  [Submit Proof]     │                   │
 └───────────────────┴─────────────────────┴───────────────────┘
@@ -630,8 +630,8 @@ impl Matchmaker {
 
 5. **Submission Feedback Loop**:
    - Submit → show spinner "Verifying with Lean..." (avg 2-8s)
-   - ✅ Green flash → "Proof Accepted! You win!" + confetti
-   - ❌ Red flash → show exact Lean error message (educational)
+   - Green flash → "Proof Accepted! You win!"
+   - Red flash → show exact Lean error message (educational)
 
 6. **Post-Game Screen**:
    - Show the winning proof

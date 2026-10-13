@@ -1,12 +1,12 @@
-# ProofBattle AI Prover: Comprehensive Technical Audit & Empirical Defense
+# ProofBattle AI Prover Technical Audit Report
 
-This document provides a clean, rigorous, and empirical response to the external technical audit of the ProofBattle AI Prover subsystem (`scripts/ml/`). It addresses every methodological question, theoretical consideration, and potential shortcut raised regarding **ProofBDH**, **DBF-MCTS**, and the formal verification pipeline in Lean 4.
+This document addresses questions raised regarding the ProofBattle automated theorem proving subsystem (`scripts/ml/`). It evaluates the architecture, search formulations, benchmark normalization, contamination risks, and Lean 4 verification soundness for **ProofBDH** and **DBF-MCTS**.
 
 ---
 
 ## 1. Executive Summary & Audit Scope
 
-During an external audit of the prover codebase (`ml.zip` / `scripts/ml/`), several important questions were raised regarding:
+During an external audit of the prover codebase (`scripts/ml/`), several questions were evaluated:
 1. **Architectural Roles**: The distinction between neural tactic generation and auxiliary search/retrieval components.
 2. **Generalization vs. Memorization**: Whether the model learned general-purpose tactic selection or memorized theorem-specific answers.
 3. **Pure Neural Performance (Test 1)**: The standalone model accuracy when all non-neural candidate sources (BM25 templates, MCTS, diagnostic repair) are disabled.
@@ -36,7 +36,7 @@ During an external audit of the prover codebase (`ml.zip` / `scripts/ml/`), seve
 > **Auditor Observation**:
 > *"There is an important distinction between a neural model that generates proof steps and a complete prover that combines neural generation with retrieval, search, and Lean feedback."*
 
-We fully agree with this distinction. The ProofBattle theorem-proving system consists of five cleanly decoupled layers:
+The theorem-proving architecture decomposes into five decoupled layers:
 
 ```text
 +-----------------------------------------------------------------------------------------+
@@ -48,7 +48,7 @@ We fully agree with this distinction. The ProofBattle theorem-proving system con
 +-----------------------------------------------------------------------------------------+
 | Layer 1: ProofBDH Neural Model (scripts/ml/proof_bdh.py)                                |
 | - Parameter count: 9,906,560 (sub-10M parameter budget).                                |
-| - Architecture: Biological Hebbian fast-weight synaptic attention (O(1) memory).        |
+| - Architecture: Recurrent fast-weight synaptic attention (O(1) memory).                 |
 | - Role: Autoregressively generates candidate tactic sequences with log-probability priors.|
 +-----------------------------------------------------------------------------------------+
          |                                                               |
@@ -77,40 +77,38 @@ We fully agree with this distinction. The ProofBattle theorem-proving system con
 
 ### Module Responsibilities
 
-1. **ProofBDH ([proof_bdh.py](../../scripts/ml/proof_bdh.py))**: A compact 9.9M-parameter neural model trained to map Lean 4 hypotheses and goals to candidate tactics. It produces probability distributions over candidate tactics.
+1. **ProofBDH ([proof_bdh.py](../../scripts/ml/proof_bdh.py))**: A 9.9M-parameter neural model trained to map Lean 4 hypotheses and goals to candidate tactics. It produces probability distributions over candidate tactics.
 2. **BM25 Premise Retriever ([premise_retriever.py](../../scripts/ml/premise_retriever.py))**: An auxiliary retrieval system indexing 102,278 Mathlib lemmas. It optionally injects retrieved lemmas into the prompt or generates premise application templates (`exact <lemma>`, `apply <lemma>`, `rw [<lemma>]`).
 3. **DBF-MCTS Prover ([dbf_mcts_prover.py](../../scripts/ml/dbf_mcts_prover.py))**: An exploration engine combining PUCT tree search, length-normalized action priors, and compiler diagnostic branching.
 4. **Lean 4 REPL Client ([lean_repl_client.py](../../scripts/ml/lean_repl_client.py))**: The ground-truth verification oracle. The neural network never verifies anything itself; Lean 4 is the sole arbiter of truth.
 
 ---
 
-## 3. Generalization vs. Memorization: Theoretical Framing
+## 3. Theoretical Framing: Learned Tactic Selection vs. Deduction
 
 > **Auditor Question**:
 > *"The most important question is whether your training data teaches the model to select general-purpose tactics or effectively memorizes theorem-specific solutions... You should describe the contribution as learned tactic selection rather than claiming the neural network performs every inference internally."*
 
-### Our Explicit Theoretical Positioning
+### Role of Neural Tactic Selection
 
-We explicitly define the contribution of ProofBDH as **learned neural tactic selection and diagnostic repair routing**, and **not** internal deductive arithmetic calculation.
+ProofBDH functions as a **learned neural tactic selector and diagnostic repair policy**, not an internal deductive computation engine.
 
-1. **Why Neural Tactic Selection is Legitimate Mathematical Reasoning**:
-   Lean 4 contains powerful verified decision procedures:
+1. **Neural Tactic Selection as Proof Search**:
+   Lean 4 provides verified decision procedures:
    - `ring`: Commutative ring equational reasoning (Gröbner basis/normal forms).
    - `linarith`: Fourier-Motzkin variable elimination for linear real/rational inequalities.
    - `omega`: Presburger arithmetic for integer/natural linear inequalities.
    - `aesop`: Automated Extensible Search for Obvious Proofs (tableaux/rule-based search).
 
-   However, deciding *which* decision procedure to apply, which hypotheses to keep or transform, or which tactic closes a given goal is undecidable in the general case and computationally prohibitive via brute-force search.
-   ProofBDH learns to inspect the abstract syntax of the mathematical goal (e.g., polynomial identities, integer bounds, structural induction) and select the exact tactic required in $\le 30$ms.
+   Selecting which decision procedure to invoke on a given goal is undecidable in general. ProofBDH maps the abstract syntax of the mathematical goal (polynomial identities, integer bounds, structural relations) to the required decision procedure in sub-30ms.
 
-2. **The Model Does Not Perform Ring Reductions Internally**:
-   A 9.9M parameter neural network cannot internally compute full algebraic normal forms or Simplex pivots for arbitrary polynomials. Claiming it does so would be physically and theoretically implausible.
-   Its contribution is finding the proof path and selecting the correct verified tactic within a tiny parameter budget ($< 10\text{M}$).
+2. **Deductive vs. Routing Separation**:
+   A 9.9M parameter model does not compute full algebraic normal forms or Simplex pivots within neural activations. Its role is proof path selection and tactic routing within the parameter budget ($\le 10\text{M}$).
 
-3. **Evidence That ProofBDH Does Not Memorize miniF2F**:
-   - **Tactic Diversity**: Solves are not concentrated in a single degenerate template. Winning scripts span `ring` (24), `linarith` (15), `omega` (11), `aesop` (11), `bound` (2), `simp` (1), `simp [pow_succ, ...]` (1), and composite `ring\naesop` (1).
+3. **Evidence of Generalization vs. Memorization**:
+   - **Tactic Diversity**: Solves are distributed across multiple procedures: `ring` (24), `linarith` (15), `omega` (11), `aesop` (11), `bound` (2), `simp` (1), `simp [pow_succ, ...]` (1), and composite `ring\naesop` (1).
    - **Zero Contamination**: Training data contains 0 occurrences of miniF2F test problem identifiers, theorem names, or formal goal strings.
-   - **Variable Renaming Robustness**: The model generalizes across arbitrary variable names ($a, b, x, y, n, m$) because its vocabulary operates on normalized mathematical tokens.
+   - **Variable Invariance**: The model generalizes across arbitrary variable names ($a, b, x, y, n, m$) through tokenized mathematical syntax representations.
 
 ---
 
@@ -278,7 +276,7 @@ Every single solved proof was re-verified in an isolated Lean 4 kernel environme
 
 ---
 
-## 9. Comprehensive Auditor Doubt & Answer Matrix
+## 9. Audit Question and Answer Matrix
 
 | # | Auditor Question / Doubt | Concrete Empirical Answer | Verification Evidence |
 | :-: | :--- | :--- | :--- |
@@ -293,7 +291,7 @@ Every single solved proof was re-verified in an isolated Lean 4 kernel environme
 
 ---
 
-## 10. How to Reproduce All Audit Checks
+## 10. Reproduction Steps
 
 All audit checks can be independently verified on any system with Python 3 and Lean 4:
 

@@ -1,6 +1,6 @@
 # ProofBDH: Baby Dragon Hatchling Neural Architecture
 
-`ProofBDH` is a custom 9.9M-parameter neural sequence model specifically engineered for formal theorem proving in Lean 4. It implements the biological post-Transformer principles introduced by Pathway (2025) in *"The Dragon Hatchling: The Missing Link between the Transformer and Models of the Brain"*.
+`ProofBDH` is a 9.9M-parameter neural sequence model engineered for formal theorem proving in Lean 4. It implements the recurrent fast-weight synaptic formulation introduced by Pathway (2025) in *"The Dragon Hatchling: The Missing Link between the Transformer and Models of the Brain"*.
 
 ---
 
@@ -46,7 +46,7 @@ $$\lambda_h = 1 - 2^{-(4 + h)}, \quad h \in \{0, 1, \dots, 7\}$$
 | **Head 7** | $0.9995117$ | 2048 tokens | Permanent theorem goal & imports memory |
 
 ### D. Non-Negative Sparse Activations ($\text{ReLU}^2$)
-Softmax attention is replaced with biological, non-negative neuron activations using $\text{ReLU}^2$:
+Softmax attention is replaced with non-negative activations using $\text{ReLU}^2$:
 
 $$q = \left[\max(0, x_q)\right]^2, \quad k = \left[\max(0, x_k)\right]^2$$
 
