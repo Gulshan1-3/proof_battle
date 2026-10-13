@@ -8,7 +8,7 @@ Welcome to the central documentation system for ProofBattle: a real-time, compet
 
 Choose your reading path depending on your role and focus:
 
-### 🔬 For ML Researchers & Reasoning Engineers
+###  For ML Researchers & Reasoning Engineers
 Explore the neural architecture, search algorithms, and empirical benchmarks:
 1. [AI Prover Overview](model/README.md): System architecture and dataflow pipeline.
 2. [ProofBDH Neural Architecture](model/PROOF_BDH.md): Hebbian synaptic fast-weights, $O(1)$ memory, 9.9M parameter budget.
@@ -18,7 +18,7 @@ Explore the neural architecture, search algorithms, and empirical benchmarks:
 6. [Technical Audit & Defense](model/AUDIT.md): Empirical answers to reviewer inquiries on Pass@k, contamination, and tactic selection.
 7. [Simulation Server](model/SIMULATION_SERVER.md): High-concurrency HTTP API for 512+ battle arenas.
 
-### 🦀 For Backend Engineers
+###  For Backend Engineers
 Explore the real-time game server, actor concurrency, and persistence:
 1. [Platform Subsystems Overview](platform/README.md): Architecture and match lifecycle.
 2. [Backend Architecture](platform/BACKEND.md): Tokio actor-per-room model (ADR-001), Two-Lane rate limiter (ADR-008), database schema.
@@ -26,20 +26,20 @@ Explore the real-time game server, actor concurrency, and persistence:
 4. [Security & Sandbox](platform/SECURITY_AND_SANDBOX.md): Lexical AST filters, fail-closed judge, resource limits.
 5. [Architecture Decision Records](DECISIONS.md): ADR-001 through ADR-012.
 
-### 🎨 For Frontend Engineers
+### For Frontend Engineers
 Explore the reactive user interface, Monaco editor, and WebSocket client:
 1. [Frontend Architecture](platform/FRONTEND.md): SvelteKit 2 + Svelte 5 runes, Monaco Editor bundling, reactive state.
 2. [WebSocket Protocol Spec](platform/PROTOCOL.md): Generated TypeScript interfaces and event contracts.
 3. [Local Development](runbooks/LOCAL_DEVELOPMENT.md): Running the Vite dev server with live reload.
 
-### 🛠️ For DevOps & Operations Engineers
+###  For DevOps & Operations Engineers
 Set up environments, run benchmarks, and maintain CI/CD:
 1. [Local Development Runbook](runbooks/LOCAL_DEVELOPMENT.md): Docker Compose, PostgreSQL migrations, service startup.
 2. [Benchmarking & Load Testing](runbooks/BENCHMARKING_AND_LOAD.md): Running `anchor_bench` and `loadgen` stress tests.
 3. [Adding & Verifying Challenges](runbooks/ADDING_CHALLENGES.md): Problem authoring and `verify_problems` CLI.
 4. [CI/CD Pipeline Runbook](runbooks/CI_CD_MAINTENANCE.md): GitHub Actions workflows, Mock Lake runner, test suite maintenance.
 
-### 🎓 For Players & Competitors
+### For Players & Competitors
 Learn how to write formal proofs in Lean 4:
 - [Lean 4 Proof Guide](../learn/README.md): Practical tactics guide (`intro`, `simp`, `ring`, `linarith`, `omega`, `aesop`).
 
