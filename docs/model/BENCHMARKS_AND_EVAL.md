@@ -75,7 +75,7 @@ All 66 solved theorems closed using standard formal decision procedures and tact
 
 ## 3. Independent Integrity & Contamination Audits
 
-All evaluation results are validated using [`scripts/ml/audit_solutions_integrity.py`](file:///home/gulshansharma/proof_battle/scripts/ml/audit_solutions_integrity.py).
+All evaluation results are validated using [`scripts/ml/audit_solutions_integrity.py`](../../scripts/ml/audit_solutions_integrity.py).
 
 The audit output is recorded in `data/clean_minif2f_eval/stage51_audit_report.json`:
 

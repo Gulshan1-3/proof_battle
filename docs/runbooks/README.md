@@ -31,7 +31,7 @@ Run documentation linting before committing:
 ```bash
 make docs-check
 ```
-This runs [`scripts/docs/lint_docs.py`](file:///home/gulshansharma/proof_battle/scripts/docs/lint_docs.py) to ensure:
+This runs [`scripts/docs/lint_docs.py`](../../scripts/docs/lint_docs.py) to ensure:
 - 0 broken relative markdown links.
 - 0 missing file references.
 - 0 invalid heading anchor targets.

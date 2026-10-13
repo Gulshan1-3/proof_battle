@@ -1,6 +1,6 @@
 # Neuro-Symbolic Lean 4 Autoformalization Engine
 
-The autoformalization subsystem in [`scripts/ml/autoformalizer.py`](file:///home/gulshansharma/proof_battle/scripts/ml/autoformalizer.py) translates informal mathematical statements, LaTeX equations, and contest problems into verified, machine-checked Lean 4 theorem declarations.
+The autoformalization subsystem in [`scripts/ml/autoformalizer.py`](../../scripts/ml/autoformalizer.py) translates informal mathematical statements, LaTeX equations, and contest problems into verified, machine-checked Lean 4 theorem declarations.
 
 ---
 
@@ -86,5 +86,5 @@ The autoformalization engine is exposed via the simulation server on port 8088:
 
 ## 5. Code References
 
-- Engine Implementation: [`scripts/ml/autoformalizer.py`](file:///home/gulshansharma/proof_battle/scripts/ml/autoformalizer.py)
-- Server Integration: [`scripts/ml/simulation_server.py`](file:///home/gulshansharma/proof_battle/scripts/ml/simulation_server.py)
+- Engine Implementation: [`scripts/ml/autoformalizer.py`](../../scripts/ml/autoformalizer.py)
+- Server Integration: [`scripts/ml/simulation_server.py`](../../scripts/ml/simulation_server.py)

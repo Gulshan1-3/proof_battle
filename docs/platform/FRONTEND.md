@@ -74,7 +74,7 @@ To prevent client clock tampering and timer drift:
 
 ## 6. Code References
 
-- Root Layout & Stores: [`frontend/src/routes/+layout.svelte`](file:///home/gulshansharma/proof_battle/frontend/src/routes/+layout.svelte)
-- Battle Arena: [`frontend/src/routes/battle/[roomId]/+page.svelte`](file:///home/gulshansharma/proof_battle/frontend/src/routes/battle/[roomId]/+page.svelte)
-- WebSocket Client: [`frontend/src/lib/ws/client.ts`](file:///home/gulshansharma/proof_battle/frontend/src/lib/ws/client.ts)
-- Monaco Lean Editor: [`frontend/src/lib/editor/MonacoEditor.svelte`](file:///home/gulshansharma/proof_battle/frontend/src/lib/editor/MonacoEditor.svelte)
+- Root Layout & Stores: [`frontend/src/routes/+layout.svelte`](../../frontend/src/routes/+layout.svelte)
+- Battle Arena: [`frontend/src/routes/battle/[roomId]/+page.svelte`](../../frontend/src/routes/battle/[roomId]/+page.svelte)
+- WebSocket Client: [`frontend/src/lib/ws/client.ts`](../../frontend/src/lib/ws/client.ts)
+- Monaco Lean Editor: [`frontend/src/lib/editor/MonacoEditor.svelte`](../../frontend/src/lib/editor/MonacoEditor.svelte)

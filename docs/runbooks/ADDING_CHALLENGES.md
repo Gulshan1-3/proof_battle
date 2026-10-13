@@ -44,7 +44,7 @@ Problems are represented in JSON Lines (`.jsonl`) format:
 ## 3. Formal Verification & Seeding Workflow
 
 ### Step 1: Add Problem Definitions
-Add candidate theorem definitions to `data/problems_curated.jsonl` or [`server/src/challenges.rs`](file:///home/gulshansharma/proof_battle/server/src/challenges.rs).
+Add candidate theorem definitions to `data/problems_curated.jsonl` or [`server/src/challenges.rs`](../../server/src/challenges.rs).
 
 ### Step 2: Run Verification CLI
 The server provides a dedicated verification CLI tool that compiles each problem against Lean 4 in parallel:

@@ -2,7 +2,7 @@
 
 This document specifies the wire protocol between the ProofBattle frontend client and the backend server over WebSocket.
 
-The Rust definitions in [`server/src/ws/message.rs`](file:///home/gulshansharma/proof_battle/server/src/ws/message.rs) and the generated TypeScript bindings in [`frontend/src/lib/ws/generated.ts`](file:///home/gulshansharma/proof_battle/frontend/src/lib/ws/generated.ts) form the authoritative implementation. Run `make codegen` to synchronize types.
+The Rust definitions in [`server/src/ws/message.rs`](../../server/src/ws/message.rs) and the generated TypeScript bindings in [`frontend/src/lib/ws/generated.ts`](../../frontend/src/lib/ws/generated.ts) form the authoritative implementation. Run `make codegen` to synchronize types.
 
 ---
 

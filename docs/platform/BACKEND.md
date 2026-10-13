@@ -69,9 +69,9 @@ make migrate
 
 ## 5. Code References
 
-- Application Entry & Routing: [`server/src/main.rs`](file:///home/gulshansharma/proof_battle/server/src/main.rs)
-- Room Actor Implementation: [`server/src/game/room.rs`](file:///home/gulshansharma/proof_battle/server/src/game/room.rs)
-- Matchmaking Engine: [`server/src/game/matchmaker.rs`](file:///home/gulshansharma/proof_battle/server/src/game/matchmaker.rs)
-- Verification Worker Pool: [`server/src/lean/runner.rs`](file:///home/gulshansharma/proof_battle/server/src/lean/runner.rs)
-- Lexical AST Filter: [`server/src/lean/filter.rs`](file:///home/gulshansharma/proof_battle/server/src/lean/filter.rs)
-- Database Operations: [`server/src/db/mod.rs`](file:///home/gulshansharma/proof_battle/server/src/db/mod.rs)
+- Application Entry & Routing: [`server/src/main.rs`](../../server/src/main.rs)
+- Room Actor Implementation: [`server/src/game/room.rs`](../../server/src/game/room.rs)
+- Matchmaking Engine: [`server/src/game/matchmaker.rs`](../../server/src/game/matchmaker.rs)
+- Verification Worker Pool: [`server/src/lean/runner.rs`](../../server/src/lean/runner.rs)
+- Lexical AST Filter: [`server/src/lean/filter.rs`](../../server/src/lean/filter.rs)
+- Database Operations: [`server/src/db/mod.rs`](../../server/src/db/mod.rs)

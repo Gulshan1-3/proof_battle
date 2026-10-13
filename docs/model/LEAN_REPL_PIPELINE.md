@@ -1,6 +1,6 @@
 # High-Throughput Lean 4 REPL & Subprocess Verification
 
-The verification layer in [`scripts/ml/lean_repl_client.py`](file:///home/gulshansharma/proof_battle/scripts/ml/lean_repl_client.py) bridges the neural prover and the formal Lean 4 kernel, reducing candidate verification latency from seconds to milliseconds.
+The verification layer in [`scripts/ml/lean_repl_client.py`](../../scripts/ml/lean_repl_client.py) bridges the neural prover and the formal Lean 4 kernel, reducing candidate verification latency from seconds to milliseconds.
 
 ---
 
@@ -64,6 +64,6 @@ Because theorem proving code may contain infinite loops (e.g., non-terminating s
 
 ## 4. Code References
 
-- REPL Client: [`scripts/ml/lean_repl_client.py`](file:///home/gulshansharma/proof_battle/scripts/ml/lean_repl_client.py)
-- Standalone Worker Fallback: [`scripts/ml/lean_worker.py`](file:///home/gulshansharma/proof_battle/scripts/ml/lean_worker.py)
+- REPL Client: [`scripts/ml/lean_repl_client.py`](../../scripts/ml/lean_repl_client.py)
+- Standalone Worker Fallback: [`scripts/ml/lean_worker.py`](../../scripts/ml/lean_worker.py)
 - REPL Upstream Directory: `lean/repl/`

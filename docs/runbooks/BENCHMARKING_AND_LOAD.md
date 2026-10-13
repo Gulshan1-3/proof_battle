@@ -6,7 +6,7 @@ ProofBattle provides two built-in Rust performance measurement binaries in `serv
 
 ## 1. Latency Profiling with `anchor_bench`
 
-[`server/src/bin/anchor_bench.rs`](file:///home/gulshansharma/proof_battle/server/src/bin/anchor_bench.rs) measures the raw performance of the Lean 4 judge and execution sandbox.
+[`server/src/bin/anchor_bench.rs`](../../server/src/bin/anchor_bench.rs) measures the raw performance of the Lean 4 judge and execution sandbox.
 
 ### Running the Benchmark
 ```bash
@@ -23,7 +23,7 @@ cargo run --manifest-path server/Cargo.toml --bin anchor_bench -- --samples 30 -
 
 ## 2. Real-Time Concurrency Testing with `loadgen`
 
-[`server/src/bin/loadgen.rs`](file:///home/gulshansharma/proof_battle/server/src/bin/loadgen.rs) simulates realistic player traffic over WebSocket connections to validate the Tokio actor model (ADR-001) and the Two-Lane rate limiter (ADR-008).
+[`server/src/bin/loadgen.rs`](../../server/src/bin/loadgen.rs) simulates realistic player traffic over WebSocket connections to validate the Tokio actor model (ADR-001) and the Two-Lane rate limiter (ADR-008).
 
 ### Running Simulated Battles
 To launch a load test against a running server:

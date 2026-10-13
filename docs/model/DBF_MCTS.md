@@ -1,6 +1,6 @@
 # Diagnostic Best-First Monte Carlo Tree Search (DBF-MCTS)
 
-`DBF-MCTS` is the automated proof search engine implemented in [`scripts/ml/dbf_mcts_prover.py`](file:///home/gulshansharma/proof_battle/scripts/ml/dbf_mcts_prover.py). It unifies best-first tree search, length-normalized policy priors, and closed-loop Lean 4 compiler error repair.
+`DBF-MCTS` is the automated proof search engine implemented in [`scripts/ml/dbf_mcts_prover.py`](../../scripts/ml/dbf_mcts_prover.py). It unifies best-first tree search, length-normalized policy priors, and closed-loop Lean 4 compiler error repair.
 
 ---
 
@@ -90,6 +90,6 @@ ProofBDH conditions directly on the compiler's error message to autoregressively
 
 ## 4. Code References
 
-- Core MCTS Implementation: [`scripts/ml/dbf_mcts_prover.py`](file:///home/gulshansharma/proof_battle/scripts/ml/dbf_mcts_prover.py)
-- Benchmark Runner: [`scripts/ml/eval_dbf_mcts_minif2f.py`](file:///home/gulshansharma/proof_battle/scripts/ml/eval_dbf_mcts_minif2f.py)
-- Lean Evaluation Seam: [`scripts/ml/lean_repl_client.py`](file:///home/gulshansharma/proof_battle/scripts/ml/lean_repl_client.py)
+- Core MCTS Implementation: [`scripts/ml/dbf_mcts_prover.py`](../../scripts/ml/dbf_mcts_prover.py)
+- Benchmark Runner: [`scripts/ml/eval_dbf_mcts_minif2f.py`](../../scripts/ml/eval_dbf_mcts_minif2f.py)
+- Lean Evaluation Seam: [`scripts/ml/lean_repl_client.py`](../../scripts/ml/lean_repl_client.py)
