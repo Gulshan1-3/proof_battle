@@ -322,6 +322,11 @@ class ProofBDH(nn.Module):
         return_premise_scores: bool = False
     ) -> Any:
         bsz, seqlen = input_ids.shape
+        if seqlen > self.config.max_seq_len:
+            input_ids = input_ids[:, -self.config.max_seq_len:]
+            seqlen = self.config.max_seq_len
+            if targets is not None:
+                targets = targets[:, -self.config.max_seq_len:]
         x = self.dropout(self.tok_embeddings(input_ids))
 
         premise_scores = None
@@ -374,6 +379,9 @@ class ProofBDH(nn.Module):
         """Autoregressive generation with exact sequence positional encodings and nucleus (top-p) sampling."""
         self.eval()
         device = next(self.parameters()).device
+        max_prompt = max(1, self.config.max_seq_len - max_new_tokens)
+        if len(prompt_ids) > max_prompt:
+            prompt_ids = prompt_ids[-max_prompt:]
         ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
 
         for _ in range(max_new_tokens):
@@ -423,6 +431,9 @@ class ProofBDH(nn.Module):
         """Autoregressive generation returning sequence and mean token log-likelihood (and optionally synaptic states)."""
         self.eval()
         device = next(self.parameters()).device
+        max_prompt = max(1, self.config.max_seq_len - max_new_tokens)
+        if len(prompt_ids) > max_prompt:
+            prompt_ids = prompt_ids[-max_prompt:]
         ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
         logprobs: List[float] = []
         last_states = None
