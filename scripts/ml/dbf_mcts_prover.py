@@ -74,6 +74,33 @@ def extract_introduced_hypotheses(tactic_str: str) -> List[str]:
     return hyps
 
 
+def parse_subgoal_hypotheses(goal_text: str) -> Tuple[str, str]:
+    """
+    Splits a Lean goal string into (hypotheses_str, target_goal_str).
+    Handles Lean interactive REPL format:
+        case <name>
+        x y : ℕ
+        h : x = y
+        ⊢ x + 0 = y
+    """
+    if not goal_text:
+        return "", ""
+    if "⊢" not in goal_text:
+        return "", goal_text.strip()
+    parts = goal_text.split("⊢", 1)
+    hyps_raw = parts[0].strip()
+    target = parts[1].strip()
+
+    hyp_lines = []
+    for line in hyps_raw.split("\n"):
+        line = line.strip()
+        if line.startswith("case ") or not line:
+            continue
+        hyp_lines.append(line)
+    hyps_str = ", ".join(hyp_lines) if hyp_lines else ""
+    return hyps_str, target
+
+
 @dataclass
 class DBFMCTSNode:
     """A node in the Diagnostic Best-First MCTS proof tree."""
@@ -94,6 +121,7 @@ class DBFMCTSNode:
     is_diagnostic_node: bool = False       # True if spawned via compiler error feedback
     latency_ms: float = 0.0
     accumulated_hypotheses: str = ""
+    proof_state_id: Optional[int] = None   # Interactive Lean 4 REPL proofState handle
 
     @property
     def q_value(self) -> float:
@@ -120,6 +148,7 @@ class DBFMCTSNode:
             "prior": round(self.prior, 4),
             "is_solved": self.is_solved,
             "is_diagnostic": self.is_diagnostic_node,
+            "proof_state_id": self.proof_state_id,
             "error_snippet": self.compiler_error[:120] if self.compiler_error else None,
             "children_count": len(self.children)
         }
@@ -394,12 +423,51 @@ class DBFMCTSProver:
         Formal Lean 4 Kernel Evaluation Oracle.
         Returns numeric value V in [0.0, 1.0]:
         - 1.0: Proof cleanly verified (0 errors, 0 sorry, 0 sorryAx)
-        - 0.70: Partial progress with remaining subgoals (valid intermediate step)
+        - 0.50..0.85: Partial progress with remaining subgoals (valid intermediate step)
+        - 0.15: Type mismatch or recoverable error
         - 0.05: Hard compilation failure
         """
-        if not node.accumulated_script:
+        if not node.tactic and not node.accumulated_script:
             return 0.05
 
+        # 1. Interactive REPL step when parent has active proof_state_id
+        if (
+            self.repl_client is not None
+            and node.parent is not None
+            and node.parent.proof_state_id is not None
+        ):
+            res = self.repl_client.step_tactic(node.parent.proof_state_id, node.tactic)
+            node.latency_ms = res.get("elapsed_ms", 0.0)
+
+            if res.get("is_solved", False):
+                node.is_solved = True
+                node.is_terminal = True
+                node.proof_state_id = res.get("new_proof_state")
+                node.remaining_subgoals = []
+                node.compiler_error = None
+                return 1.0
+
+            new_ps = res.get("new_proof_state")
+            goals = res.get("goals", [])
+            err = res.get("error")
+
+            if new_ps is not None and goals:
+                # Valid intermediate progress: subgoals produced
+                node.proof_state_id = new_ps
+                node.remaining_subgoals = goals
+                node.compiler_error = None
+                n_goals = len(goals)
+                reward = float(max(0.50, min(0.85, 0.50 + 0.35 / (1.0 + n_goals))))
+                return reward
+            else:
+                node.compiler_error = err or "tactic failed"
+                err_lower = (node.compiler_error or "").lower()
+                if "type mismatch" in err_lower or "unknown identifier" in err_lower:
+                    return 0.15
+                else:
+                    return 0.05
+
+        # 2. Fallback: Full script verification
         if self.repl_client is not None:
             ok, lat, err = self.repl_client.verify_script(raw_code, node.accumulated_script)
         else:
@@ -424,7 +492,8 @@ class DBFMCTSProver:
                         subgoals.append(subg)
             node.remaining_subgoals = subgoals
             node.compiler_error = None  # Progress is valid: clear error so MCTS branches deeper
-            return 0.70  # Strong positive value gradient for valid intermediate progress
+            n_goals = max(1, len(subgoals))
+            return float(max(0.50, min(0.85, 0.50 + 0.35 / (1.0 + n_goals))))
         elif "type mismatch" in err_lower:
             return 0.15
         else:
@@ -452,13 +521,24 @@ class DBFMCTSProver:
         params = problem.get("params", "")
         raw_code = problem.get("raw_code", "")
 
+        root_ps_id = None
+        initial_goals = []
+        if self.repl_client is not None:
+            try:
+                root_ps_id, initial_goals, _ = self.repl_client.init_proof_state(raw_code)
+            except Exception:
+                root_ps_id = None
+                initial_goals = []
+
         root = DBFMCTSNode(
             node_id="root",
             depth=0,
             goal=goal,
             tactic="",
             accumulated_script="",
-            accumulated_hypotheses=params
+            accumulated_hypotheses=params,
+            proof_state_id=root_ps_id,
+            remaining_subgoals=initial_goals
         )
 
         nodes_expanded = 1
@@ -546,6 +626,7 @@ class DBFMCTSProver:
                         if repair_child.is_solved:
                             repairs_succeeded += 1
                             winning_node = repair_child
+                            solve_method = "diagnostic_repair"
                             break
                     if winning_node:
                         break
@@ -556,10 +637,16 @@ class DBFMCTSProver:
 
                 elif not leaf.children and not leaf.is_terminal:
                     # Multi-step continuation: condition on remaining subgoals and accumulate hypotheses
-                    next_goal = leaf.remaining_subgoals[0] if leaf.remaining_subgoals else leaf.goal
+                    if leaf.remaining_subgoals:
+                        next_goal_raw = leaf.remaining_subgoals[0]
+                        sub_hyps, sub_target = parse_subgoal_hypotheses(next_goal_raw)
+                        next_goal = sub_target
+                        curr_hyps = f"{leaf.accumulated_hypotheses} {sub_hyps}".strip() if leaf.accumulated_hypotheses else sub_hyps
+                    else:
+                        next_goal = leaf.goal
+                        curr_hyps = leaf.accumulated_hypotheses
 
                     # Accumulate newly introduced hypotheses from leaf's tactic (have, obtain)
-                    curr_hyps = leaf.accumulated_hypotheses
                     if leaf.tactic:
                         intro_hyps = extract_introduced_hypotheses(leaf.tactic)
                         if intro_hyps:
@@ -585,6 +672,7 @@ class DBFMCTSProver:
                         self.backpropagate(step_child, val)
                         if step_child.is_solved:
                             winning_node = step_child
+                            solve_method = "tree_search"
                             break
                     if winning_node:
                         break
