@@ -82,4 +82,5 @@ The system is engineered to operate under strict resource constraints ($\le 10,0
 - [Persistent Lean 4 REPL & Subprocess Sandbox](LEAN_REPL_PIPELINE.md)
 - [Autoformalization Engine](AUTOFORMALIZATION.md)
 - [Benchmark Results & Integrity Audits](BENCHMARKS_AND_EVAL.md)
+- [Comprehensive Technical Audit & Empirical Defense](AUDIT.md)
 - [Simulation Server & HTTP API](SIMULATION_SERVER.md)
