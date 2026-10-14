@@ -39,6 +39,11 @@ from dbf_mcts_prover import (
 )
 from lean_repl_client import LeanREPLClient
 
+try:
+    from learned_allocation_controller import LearnedAllocationController
+except ImportError:
+    LearnedAllocationController = None
+
 
 @dataclass
 class BranchState:
@@ -372,6 +377,42 @@ class MultiBranchSearchForest:
 
                 if any(b.is_solved for b in branches):
                     break
+
+        elif condition == "C4":
+            # Condition 4: LAMP - Learned Adaptive Monte Carlo Proof Search Controller
+            controller = LearnedAllocationController() if LearnedAllocationController is not None else None
+            while self._get_aggregate_time_ms(branches) < budget_ms:
+                active_branches = [b for b in branches if not b.is_exhausted and not b.is_solved]
+                if not active_branches:
+                    termination_reason = "all_branches_exhausted"
+                    break
+
+                if controller is not None:
+                    best_idx, alloc_delta = controller.select_next_branch(
+                        branches,
+                        global_budget_ms=budget_ms,
+                        step_chunk_delta=self.step_chunk_delta
+                    )
+                else:
+                    best_idx = 0
+                    alloc_delta = self.step_chunk_delta
+
+                branch_to_step = branches[best_idx]
+                sims_before = branch_to_step.visits
+                self._step_branch_simulations(
+                    branch_to_step,
+                    raw_code,
+                    num_sims=alloc_delta,
+                    budget_ms=budget_ms,
+                    all_branches=branches
+                )
+
+                if branch_to_step.is_solved:
+                    termination_reason = "solved"
+                    break
+
+                if branch_to_step.visits == sims_before and branch_to_step.is_exhausted:
+                    continue
 
         total_elapsed = (time.perf_counter() - t_global_start) * 1000.0
         winning_branch = next((b for b in branches if b.is_solved), None)
