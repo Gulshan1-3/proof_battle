@@ -396,12 +396,12 @@ class DBFMCTSProver:
     def _extract_tactic(self, text: str) -> str:
         """Extracts tactic payload from autoregressive tags."""
         if "<tactic>" in text:
-            t = text.split("<tactic>")[1]
+            t = text.split("<tactic>")[-1]
             if "<qed>" in t:
-                return t.split("<qed>")[0].strip()
+                t = t.split("<qed>")[0]
             elif "<eos>" in t:
-                return t.split("<eos>")[0].strip()
-            return t.strip()
+                t = t.split("<eos>")[0]
+            return t.strip().lstrip(">").strip()
         return ""
 
     def _sanitize_error(self, err: str) -> str:

@@ -54,21 +54,24 @@ class ProofDataset(Dataset):
     def __len__(self) -> int:
         return len(self.data)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> Tuple[List[int], List[int]]:
         tokens = self.data[idx]
         if len(tokens) > self.max_len:
             tokens = tokens[:self.max_len]
-        
-        input_ids = tokens[:-1]
-        targets = tokens[1:]
+        return tokens[:-1], tokens[1:]
 
-        # Pad to max_len - 1
-        pad_len = (self.max_len - 1) - len(input_ids)
-        if pad_len > 0:
-            input_ids = input_ids + [self.pad_id] * pad_len
-            targets = targets + [-100] * pad_len  # -100 ignored by CrossEntropyLoss
 
-        return torch.tensor(input_ids, dtype=torch.long), torch.tensor(targets, dtype=torch.long)
+def collate_proof_batch(batch, max_len: int = 512, pad_id: int = 0) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Dynamically pads batch to the longest sample in the batch rather than static max_seq_len."""
+    batch_max = min(max_len - 1, max(len(ids) for ids, tgts in batch))
+    padded_x, padded_y = [], []
+    for ids, tgts in batch:
+        cur_x = ids[:batch_max]
+        cur_y = tgts[:batch_max]
+        p_len = batch_max - len(cur_x)
+        padded_x.append(cur_x + [pad_id] * p_len)
+        padded_y.append(cur_y + [-100] * p_len)
+    return torch.tensor(padded_x, dtype=torch.long), torch.tensor(padded_y, dtype=torch.long)
 
 
 def load_and_tokenize(
@@ -153,9 +156,9 @@ def train_curriculum(
 ):
     tier = tier.lower().strip()
     if batch_size is None:
-        batch_size = 2 if tier == "95m" else 16
+        batch_size = 4 if tier == "95m" else 16
     if tier == "95m" and grad_accum_steps == 1:
-        grad_accum_steps = 4
+        grad_accum_steps = 2
 
     if device_name is None:
         device_name = "cuda" if torch.cuda.is_available() else "cpu"
@@ -172,10 +175,15 @@ def train_curriculum(
     print(f"Loaded tokenizer with vocab size: {len(tokenizer.vocab)}")
 
     # 1. Load Training and Validation Datasets
-    train_files = [
-        TRACES_DIR / "multistep_train_traces.jsonl",
-        TRACES_DIR / "stage51_unified_train.jsonl"
-    ]
+    expanded_file = TRACES_DIR / "stage57_expanded_train.jsonl"
+    if tier == "95m" and expanded_file.exists():
+        train_files = [expanded_file]
+        print(f"Using Stage 57 Expanded Training Corpus: {expanded_file.name}")
+    else:
+        train_files = [
+            TRACES_DIR / "multistep_train_traces.jsonl",
+            TRACES_DIR / "stage51_unified_train.jsonl"
+        ]
     val_files = [
         TRACES_DIR / "val_traces.jsonl"
     ]
@@ -190,8 +198,9 @@ def train_curriculum(
     train_dataset = ProofDataset(train_tokens, max_len=max_seq_len, pad_id=pad_id)
     val_dataset = ProofDataset(val_tokens, max_len=max_seq_len, pad_id=pad_id)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    collate = lambda b: collate_proof_batch(b, max_len=max_seq_len, pad_id=pad_id)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True, collate_fn=collate)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, collate_fn=collate)
 
     # 2. Tier Checkpoint and Parameter Resolution
     if tier == "95m":
