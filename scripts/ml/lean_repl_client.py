@@ -197,6 +197,60 @@ class LeanREPLClient:
             err_msg = "\n".join(errors) if errors else "declaration contains unsolved goals or sorry"
             return False, elapsed_ms, err_msg
 
+    def verify_full_code(
+        self,
+        full_lean_code: str,
+        theorem_name: Optional[str] = None
+    ) -> Tuple[bool, float, str, List[str]]:
+        """
+        Verifies complete arbitrary Lean 4 code blocks (preserving indentation, calc blocks, and comments).
+        Optionally queries axioms if theorem_name is provided.
+        Returns: (is_solved, latency_ms, error_message, axioms_list)
+        """
+        t0 = time.perf_counter()
+        lines = []
+        for line in full_lean_code.split("\n"):
+            line_str = line.strip()
+            if line_str.startswith("import "):
+                continue
+            if line_str.startswith("set_option maxHeartbeats 0"):
+                continue
+            lines.append(line)
+        cleaned_code = "\n".join(lines).strip()
+
+        if theorem_name:
+            code_to_run = f"{cleaned_code}\n#print axioms {theorem_name}"
+        else:
+            code_to_run = cleaned_code
+
+        with self.lock:
+            resp = self._send_raw({"cmd": code_to_run, "env": self.root_env_id})
+
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        messages = resp.get("messages", []) or []
+        sorries = resp.get("sorries", []) or []
+
+        errors = [m["data"] for m in messages if m.get("severity") == "error"]
+        has_sorry = len(sorries) > 0 or any("sorry" in m.get("data", "") for m in messages)
+
+        axioms: List[str] = []
+        for m in messages:
+            data = m.get("data", "")
+            if "depends on axioms:" in data:
+                try:
+                    ax_str = data.split("depends on axioms:")[1].strip()
+                    if ax_str.startswith("[") and ax_str.endswith("]"):
+                        raw_items = ax_str[1:-1].split(",")
+                        axioms = [item.strip() for item in raw_items if item.strip()]
+                except Exception:
+                    pass
+
+        if not errors and not has_sorry and "env" in resp:
+            return True, elapsed_ms, "", axioms
+        else:
+            err_msg = "\n".join(errors) if errors else "declaration contains unsolved goals or sorry"
+            return False, elapsed_ms, err_msg, axioms
+
     def init_proof_state(self, raw_code: str) -> Tuple[Optional[int], List[str], str]:
         """
         Enters interactive tactic mode for a theorem.
