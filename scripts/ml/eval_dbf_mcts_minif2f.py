@@ -67,8 +67,11 @@ def evaluate_split(
     vocab_path: Optional[str] = None
 ):
     tier = tier.lower().strip()
-    if checkpoint_path is None and tier == "95m":
-        checkpoint_path = str(DATA_DIR / "native_prover" / "checkpoints" / "bdh_95m_curriculum_best.pt")
+    if checkpoint_path is None:
+        if tier == "95m":
+            checkpoint_path = str(DATA_DIR / "native_prover" / "checkpoints" / "bdh_95m_curriculum_best.pt")
+        elif tier == "cascade":
+            checkpoint_path = "cascade"
 
     print("=" * 80)
     tag_str = f" [TAG: {tag}] [TIER: {tier.upper()}]" if tag else f" [TIER: {tier.upper()}]"
@@ -140,7 +143,7 @@ def evaluate_split(
     if not probs_to_run:
         print("All problems already evaluated.")
     else:
-        prover_kwargs = {"device": device, "timeout_sec": timeout_sec}
+        prover_kwargs = {"device": device, "timeout_sec": timeout_sec, "tier": tier}
         if checkpoint_path:
             prover_kwargs["checkpoint_path"] = checkpoint_path
         if vocab_path:
@@ -243,7 +246,7 @@ def evaluate_split(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate DBF-MCTS on miniF2F")
-    parser.add_argument("--tier", type=str, default="10m", choices=["10m", "95m"], help="Model tier: 10m baseline or 95m scale")
+    parser.add_argument("--tier", type=str, default="10m", choices=["10m", "95m", "cascade"], help="Model tier: 10m baseline, 95m scale, or cascade (dual-tier ensemble)")
     parser.add_argument("--split", type=str, default="test", choices=["valid", "test", "all"])
     parser.add_argument("--filter", type=str, default=None, help="Filter by competition or problem substring (e.g. aime, imo)")
     parser.add_argument("--simulations", type=int, default=32)

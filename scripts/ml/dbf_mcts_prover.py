@@ -51,8 +51,10 @@ CURRICULUM_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_curriculu
 STAGE52_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage52_best.pt"
 STAGE51_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage51.pt"
 MULTISTEP_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_multistep.pt"
-CLEAN_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_clean.pt"
 CHECKPOINT_PATH = CURRICULUM_CKPT if CURRICULUM_CKPT.exists() else (STAGE52_CKPT if STAGE52_CKPT.exists() else (STAGE51_CKPT if STAGE51_CKPT.exists() else (MULTISTEP_CKPT if MULTISTEP_CKPT.exists() else CLEAN_CKPT)))
+STAGE58_95M = DATA_DIR / "native_prover" / "checkpoints" / "bdh_95m_stage58_best.pt"
+CURRICULUM_95M = DATA_DIR / "native_prover" / "checkpoints" / "bdh_95m_curriculum_best.pt"
+CKPT_95M = STAGE58_95M if STAGE58_95M.exists() else CURRICULUM_95M
 VOCAB_PATH = DATA_DIR / "native_prover" / "vocab.json"
 
 
@@ -199,7 +201,8 @@ class DBFMCTSProver:
         max_depth: int = 8,
         timeout_sec: float = 14.0,
         device: Optional[str] = None,
-        use_repl: bool = True
+        use_repl: bool = True,
+        tier: Optional[str] = None
     ):
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -210,17 +213,29 @@ class DBFMCTSProver:
         self.timeout_sec = timeout_sec
 
         self.tokenizer = ProofTokenizer(vocab_path)
-        self.model = ProofBDH.load_checkpoint(checkpoint_path, device=device)
-        self.model.eval()
 
-        # Enforce tier-based parameter budget compliance (10M baseline or 100M frontier)
-        params = self.model.count_parameters()
-        if params <= 10_000_000:
-            self.tier = "10m"
-        elif params <= 100_000_000:
-            self.tier = "95m"
+        if tier == "cascade" or checkpoint_path == "cascade":
+            self.tier = "cascade"
+            ckpt_10m = str(CURRICULUM_CKPT) if CURRICULUM_CKPT.exists() else str(CHECKPOINT_PATH)
+            ckpt_95m = str(CKPT_95M)
+            print(f"Initializing Dual-Tier Cascade Prover: 10M Baseline + 95M Frontier on {device}")
+            self.model = ProofBDH.load_checkpoint(ckpt_10m, device=device)
+            self.model.eval()
+            self.model_95m = ProofBDH.load_checkpoint(ckpt_95m, device=device)
+            self.model_95m.eval()
         else:
-            raise AssertionError(f"Integrity error: parameter count {params:,} exceeds 100,000,000 frontier budget")
+            self.model = ProofBDH.load_checkpoint(checkpoint_path, device=device)
+            self.model.eval()
+            self.model_95m = None
+
+            # Enforce tier-based parameter budget compliance (10M baseline or 100M frontier)
+            params = self.model.count_parameters()
+            if params <= 10_000_000:
+                self.tier = "10m"
+            elif params <= 100_000_000:
+                self.tier = "95m"
+            else:
+                raise AssertionError(f"Integrity error: parameter count {params:,} exceeds 100,000,000 frontier budget")
 
         self.gen_lock = threading.Lock()
         self.eos_id = self.tokenizer.vocab.get("<qed>")
@@ -282,68 +297,73 @@ class DBFMCTSProver:
         candidates: List[Tuple[str, float]] = []
         seen: Set[str] = set()
 
-        # 1. Greedy candidate (neural exploitation anchor)
-        with self.gen_lock:
-            toks_greedy, mean_lp = self.model.generate_with_logprobs(
-                prompt_ids,
-                max_new_tokens=96,
-                temperature=0.0,
-                top_k=5,
-                eos_id=self.eos_id
-            )
-        text_greedy = self.tokenizer.decode(toks_greedy)
-        tac_greedy = self._extract_tactic(text_greedy)
-        if tac_greedy and tac_greedy not in seen:
-            seen.add(tac_greedy)
-            gen_len = max(1, len(toks_greedy) - len(prompt_ids))
-            prior = float(max(0.20, min(0.95, math.exp(mean_lp / (gen_len ** (self.alpha_len_norm - 1.0))))))
-            candidates.append((tac_greedy, prior))
+        models_to_query = [self.model]
+        if self.tier == "cascade" and self.model_95m is not None:
+            models_to_query.append(self.model_95m)
 
-        # 2. Context-Conditioned Neural Generation (Conditioned on retrieved Mathlib premises)
-        retrieved_lemmas = []
-        if self.retriever is not None:
-            retrieved_lemmas = self.retriever.retrieve(f"{params} {goal}" if params else goal, top_k=3)
-            if retrieved_lemmas:
-                lemmas_snippet = " ; ".join([f"{l['name']}: {l.get('signature', '')[:60]}" for l in retrieved_lemmas[:2]])
-                ctx_prompt = f"<lemmas> {lemmas_snippet} </lemmas> <hyp> {params} </hyp> <goal> {goal} <plan> proof </plan><tactic>" if params else f"<lemmas> {lemmas_snippet} </lemmas> <goal> {goal} <plan> proof </plan><tactic>"
-                ctx_prompt_ids = self.tokenizer.encode(ctx_prompt, add_bos=True, add_eos=False)
+        for m_idx, active_model in enumerate(models_to_query):
+            # 1. Greedy candidate (neural exploitation anchor)
+            with self.gen_lock:
+                toks_greedy, mean_lp = active_model.generate_with_logprobs(
+                    prompt_ids,
+                    max_new_tokens=96,
+                    temperature=0.0,
+                    top_k=5,
+                    eos_id=self.eos_id
+                )
+            text_greedy = self.tokenizer.decode(toks_greedy)
+            tac_greedy = self._extract_tactic(text_greedy)
+            if tac_greedy and tac_greedy not in seen:
+                seen.add(tac_greedy)
+                gen_len = max(1, len(toks_greedy) - len(prompt_ids))
+                prior = float(max(0.20, min(0.95, math.exp(mean_lp / (gen_len ** (self.alpha_len_norm - 1.0))))))
+                candidates.append((tac_greedy, prior))
+
+            # 2. Context-Conditioned Neural Generation (Conditioned on retrieved Mathlib premises)
+            if self.retriever is not None and m_idx == 0:
+                retrieved_lemmas = self.retriever.retrieve(f"{params} {goal}" if params else goal, top_k=3)
+                if retrieved_lemmas:
+                    lemmas_snippet = " ; ".join([f"{l['name']}: {l.get('signature', '')[:60]}" for l in retrieved_lemmas[:2]])
+                    ctx_prompt = f"<lemmas> {lemmas_snippet} </lemmas> <hyp> {params} </hyp> <goal> {goal} <plan> proof </plan><tactic>" if params else f"<lemmas> {lemmas_snippet} </lemmas> <goal> {goal} <plan> proof </plan><tactic>"
+                    ctx_prompt_ids = self.tokenizer.encode(ctx_prompt, add_bos=True, add_eos=False)
+                    with self.gen_lock:
+                        toks_ctx, mean_lp_ctx = active_model.generate_with_logprobs(
+                            ctx_prompt_ids,
+                            max_new_tokens=96,
+                            temperature=0.3,
+                            top_k=15,
+                            top_p=0.9,
+                            eos_id=self.eos_id
+                        )
+                    text_ctx = self.tokenizer.decode(toks_ctx)
+                    tac_ctx = self._extract_tactic(text_ctx)
+                    if tac_ctx and tac_ctx not in seen:
+                        seen.add(tac_ctx)
+                        gen_len_ctx = max(1, len(toks_ctx) - len(ctx_prompt_ids))
+                        prior_ctx = float(max(0.15, min(0.90, math.exp(mean_lp_ctx / (gen_len_ctx ** (self.alpha_len_norm - 1.0))))))
+                        candidates.append((tac_ctx, prior_ctx))
+
+            # 3. Stochastic nucleus sampling candidates (neural exploration branches)
+            sampling_temps = [0.3, 0.7, 0.9]
+            n_samples = max(1, (num_candidates - 1) // len(models_to_query))
+            for idx in range(n_samples):
+                temp = sampling_temps[idx % len(sampling_temps)]
                 with self.gen_lock:
-                    toks_ctx, mean_lp_ctx = self.model.generate_with_logprobs(
-                        ctx_prompt_ids,
+                    toks_samp, mean_lp = active_model.generate_with_logprobs(
+                        prompt_ids,
                         max_new_tokens=96,
-                        temperature=0.3,
-                        top_k=15,
+                        temperature=temp,
+                        top_k=25,
                         top_p=0.9,
                         eos_id=self.eos_id
                     )
-                text_ctx = self.tokenizer.decode(toks_ctx)
-                tac_ctx = self._extract_tactic(text_ctx)
-                if tac_ctx and tac_ctx not in seen:
-                    seen.add(tac_ctx)
-                    gen_len_ctx = max(1, len(toks_ctx) - len(ctx_prompt_ids))
-                    prior_ctx = float(max(0.15, min(0.90, math.exp(mean_lp_ctx / (gen_len_ctx ** (self.alpha_len_norm - 1.0))))))
-                    candidates.append((tac_ctx, prior_ctx))
-
-        # 3. Stochastic nucleus sampling candidates (neural exploration branches)
-        sampling_temps = [0.3, 0.7, 0.9]
-        for idx in range(num_candidates - 1):
-            temp = sampling_temps[idx % len(sampling_temps)]
-            with self.gen_lock:
-                toks_samp, mean_lp = self.model.generate_with_logprobs(
-                    prompt_ids,
-                    max_new_tokens=96,
-                    temperature=temp,
-                    top_k=25,
-                    top_p=0.9,
-                    eos_id=self.eos_id
-                )
-            text_samp = self.tokenizer.decode(toks_samp)
-            tac_samp = self._extract_tactic(text_samp)
-            if tac_samp and tac_samp not in seen:
-                seen.add(tac_samp)
-                gen_len = max(1, len(toks_samp) - len(prompt_ids))
-                prior = float(max(0.10, min(0.90, math.exp(mean_lp / (gen_len ** (self.alpha_len_norm - 1.0))))))
-                candidates.append((tac_samp, prior))
+                text_samp = self.tokenizer.decode(toks_samp)
+                tac_samp = self._extract_tactic(text_samp)
+                if tac_samp and tac_samp not in seen:
+                    seen.add(tac_samp)
+                    gen_len = max(1, len(toks_samp) - len(prompt_ids))
+                    prior = float(max(0.10, min(0.90, math.exp(mean_lp / (gen_len ** (self.alpha_len_norm - 1.0))))))
+                    candidates.append((tac_samp, prior))
 
         # 4. Mathlib Premise RAG tactical candidates (117k lemma semantic retrieval)
         if self.retriever is not None:
@@ -353,6 +373,7 @@ class DBFMCTSProver:
                     seen.add(p_tac)
                     candidates.append((p_tac, p_prior))
 
+        candidates.sort(key=lambda x: x[1], reverse=True)
         return candidates
 
     def generate_diagnostic_repairs(
@@ -374,9 +395,10 @@ class DBFMCTSProver:
         repairs: List[Tuple[str, float]] = []
         seen: Set[str] = set()
 
+        repair_model = self.model_95m if (self.tier == "cascade" and self.model_95m is not None) else self.model
         for temp in [0.0, 0.7][:num_repairs]:
             with self.gen_lock:
-                toks, mean_lp = self.model.generate_with_logprobs(
+                toks, mean_lp = repair_model.generate_with_logprobs(
                     prompt_ids,
                     max_new_tokens=96,
                     temperature=temp,

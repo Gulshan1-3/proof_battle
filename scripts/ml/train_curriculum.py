@@ -156,9 +156,9 @@ def train_curriculum(
 ):
     tier = tier.lower().strip()
     if batch_size is None:
-        batch_size = 4 if tier == "95m" else 16
+        batch_size = 2 if tier == "95m" else 16
     if tier == "95m" and grad_accum_steps == 1:
-        grad_accum_steps = 2
+        grad_accum_steps = 4
 
     if device_name is None:
         device_name = "cuda" if torch.cuda.is_available() else "cpu"
@@ -175,10 +175,20 @@ def train_curriculum(
     print(f"Loaded tokenizer with vocab size: {len(tokenizer.vocab)}")
 
     # 1. Load Training and Validation Datasets
+    balanced_file = TRACES_DIR / "stage59_balanced_train.jsonl"
     expanded_file = TRACES_DIR / "stage57_expanded_train.jsonl"
-    if tier == "95m" and expanded_file.exists():
-        train_files = [expanded_file]
-        print(f"Using Stage 57 Expanded Training Corpus: {expanded_file.name}")
+    if tier == "95m":
+        if balanced_file.exists():
+            train_files = [balanced_file]
+            print(f"Using Stage 59 Balanced Training Corpus: {balanced_file.name}")
+        elif expanded_file.exists():
+            train_files = [expanded_file]
+            print(f"Using Stage 57 Expanded Training Corpus: {expanded_file.name}")
+        else:
+            train_files = [
+                TRACES_DIR / "multistep_train_traces.jsonl",
+                TRACES_DIR / "stage51_unified_train.jsonl"
+            ]
     else:
         train_files = [
             TRACES_DIR / "multistep_train_traces.jsonl",
@@ -283,6 +293,8 @@ def train_curriculum(
             if step % (50 * grad_accum_steps) == 0 or step == len(train_loader):
                 curr_lr = scheduler.get_last_lr()[0]
                 print(f"Epoch {epoch:02d}/{epochs:02d} | Step {step:04d}/{len(train_loader)} | Train Loss: {loss.item():.4f} | LR: {curr_lr:.2e}", flush=True)
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
 
         # Validation Check at End of Epoch
         val_loss = evaluate_val_loss(model, val_loader, device, use_amp=use_amp, amp_dtype=amp_dtype)
