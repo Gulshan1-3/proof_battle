@@ -105,6 +105,39 @@ def parse_subgoal_hypotheses(goal_text: str) -> Tuple[str, str]:
 
 
 @dataclass
+class DynamicStoppingConfig:
+    """Configuration for Theorem-Proving Dynamic Simulation MCTS (TP-DS-MCTS)."""
+    enabled: bool = True
+    min_sims: int = 4                       # Min simulations before barren-tree rejection check
+    base_sims: int = 32                     # Base simulation budget per problem
+    max_surge_sims: int = 96                # Max simulation budget when compute is surged
+    barren_value_threshold: float = 0.15    # Threshold below which nodes are considered non-progressing
+    max_diagnostic_cycles: int = 2          # Max repeated identical error cycles allowed on a branch
+
+
+def categorize_lean_error(err: Optional[str]) -> str:
+    """Categorizes Lean 4 error string into canonical error class."""
+    if not err:
+        return "none"
+    err_lower = err.lower()
+    if "type mismatch" in err_lower:
+        return "type_mismatch"
+    if "unknown identifier" in err_lower:
+        return "unknown_identifier"
+    if "unsolved goals" in err_lower:
+        return "unsolved_goals"
+    if "tactic 'apply' failed" in err_lower:
+        return "apply_failed"
+    if "tactic 'rewrite' failed" in err_lower or "tactic 'rw' failed" in err_lower:
+        return "rw_failed"
+    if "maximum recursion depth" in err_lower or "heartbeats" in err_lower:
+        return "resource_exhausted"
+    if "syntax error" in err_lower or "expected" in err_lower:
+        return "syntax_error"
+    return "tactic_failed"
+
+
+@dataclass
 class DBFMCTSNode:
     """A node in the Diagnostic Best-First MCTS proof tree."""
     node_id: str
@@ -125,6 +158,8 @@ class DBFMCTSNode:
     latency_ms: float = 0.0
     accumulated_hypotheses: str = ""
     proof_state_id: Optional[int] = None   # Interactive Lean 4 REPL proofState handle
+    error_category: Optional[str] = None   # Canonical Lean error classification
+    diagnostic_depth: int = 0              # Depth in diagnostic repair chain
 
     @property
     def q_value(self) -> float:
@@ -152,6 +187,8 @@ class DBFMCTSNode:
             "is_solved": self.is_solved,
             "is_diagnostic": self.is_diagnostic_node,
             "proof_state_id": self.proof_state_id,
+            "error_category": self.error_category,
+            "diagnostic_depth": self.diagnostic_depth,
             "error_snippet": self.compiler_error[:120] if self.compiler_error else None,
             "children_count": len(self.children)
         }
@@ -168,8 +205,11 @@ class DBFMCTSResult:
     diagnostic_repairs_attempted: int
     diagnostic_repairs_succeeded: int
     total_latency_ms: float
-    solve_method: Optional[str] = None     # "one_step" or "tree_search"
+    solve_method: Optional[str] = None     # "one_step", "tree_search", "diagnostic_repair"
     trajectory: List[Dict[str, Any]] = field(default_factory=list)
+    early_stopped: Optional[str] = None    # "qed", "barren_tree", "diagnostic_cycle", "budget_exhausted", "timeout"
+    effective_simulations: int = 0
+    surged: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -182,7 +222,10 @@ class DBFMCTSResult:
             "diagnostic_repairs_attempted": self.diagnostic_repairs_attempted,
             "diagnostic_repairs_succeeded": self.diagnostic_repairs_succeeded,
             "total_latency_ms": round(self.total_latency_ms, 1),
-            "trajectory_steps": len(self.trajectory)
+            "trajectory_steps": len(self.trajectory),
+            "early_stopped": self.early_stopped,
+            "effective_simulations": self.effective_simulations,
+            "surged": self.surged
         }
 
 
@@ -489,13 +532,22 @@ class DBFMCTSProver:
             err = res.get("error")
 
             if new_ps is not None and goals:
-                # Valid intermediate progress: subgoals produced
-                node.proof_state_id = new_ps
-                node.remaining_subgoals = goals
-                node.compiler_error = None
-                n_goals = len(goals)
-                reward = float(max(0.50, min(0.85, 0.50 + 0.35 / (1.0 + n_goals))))
-                return reward
+                # Check if goals represent actual progress
+                parent_goals = node.parent.remaining_subgoals if (node.parent and node.parent.remaining_subgoals) else ([node.parent.goal] if node.parent else [node.goal])
+                parent_target = parent_goals[0].split("⊢")[-1].strip() if parent_goals else node.goal.split("⊢")[-1].strip()
+                child_target = goals[0].split("⊢")[-1].strip() if goals else ""
+
+                if len(goals) < len(parent_goals) or (child_target and child_target != parent_target):
+                    # Valid intermediate progress: goal reduced or proposition transformed!
+                    node.proof_state_id = new_ps
+                    node.remaining_subgoals = goals
+                    node.compiler_error = None
+                    n_goals = len(goals)
+                    return float(max(0.50, min(0.85, 0.50 + 0.35 / (1.0 + n_goals))))
+                else:
+                    # Stuttering step: goal untouched
+                    node.compiler_error = err or "tactic made no progress (goal unchanged)"
+                    return 0.05
             else:
                 node.compiler_error = err or "tactic failed"
                 err_lower = (node.compiler_error or "").lower()
@@ -528,9 +580,17 @@ class DBFMCTSProver:
                     if subg and subg not in subgoals:
                         subgoals.append(subg)
             node.remaining_subgoals = subgoals
-            node.compiler_error = None  # Progress is valid: clear error so MCTS branches deeper
-            n_goals = max(1, len(subgoals))
-            return float(max(0.50, min(0.85, 0.50 + 0.35 / (1.0 + n_goals))))
+            parent_target = node.goal.split("⊢")[-1].strip()
+            child_target = subgoals[0].split("⊢")[-1].strip() if subgoals else ""
+
+            if child_target and child_target != parent_target:
+                node.compiler_error = err  # Retain error so in-tree diagnostic repair can synthesize completions
+                n_goals = max(1, len(subgoals))
+                return float(max(0.50, min(0.85, 0.50 + 0.35 / (1.0 + n_goals))))
+            else:
+                # Goal unchanged: tactic made no progress
+                node.compiler_error = err or "tactic made no progress"
+                return 0.05
         elif "type mismatch" in err_lower:
             return 0.15
         else:
@@ -547,16 +607,25 @@ class DBFMCTSProver:
     def search(
         self,
         problem: Dict[str, Any],
-        simulations_budget: int = 16
+        simulations_budget: int = 32,
+        dynamic_stopping: Optional[DynamicStoppingConfig] = None
     ) -> DBFMCTSResult:
         """
-        Executes complete DBF-MCTS search for a theorem statement.
+        Executes complete TP-DS-MCTS search for a theorem statement.
+        Incorporates dynamic simulation allocation, early barren-tree rejection,
+        diagnostic loop detection, and progress-driven compute surging.
         """
         t0 = time.perf_counter()
         pid = problem.get("problem_id", "unknown")
         goal = problem.get("goal", "")
         params = problem.get("params", "")
         raw_code = problem.get("raw_code", "")
+
+        if dynamic_stopping is None:
+            dynamic_stopping = DynamicStoppingConfig(base_sims=simulations_budget)
+        elif not dynamic_stopping.enabled:
+            dynamic_stopping.base_sims = simulations_budget
+            dynamic_stopping.max_surge_sims = simulations_budget
 
         root_ps_id = None
         initial_goals = []
@@ -584,6 +653,13 @@ class DBFMCTSProver:
         repairs_attempted = 0
         repairs_succeeded = 0
         solve_method: Optional[str] = None
+        early_stopped: Optional[str] = None
+        surged = False
+        effective_budget = dynamic_stopping.base_sims
+        max_allowed_sims = dynamic_stopping.max_surge_sims if dynamic_stopping.enabled else simulations_budget
+        has_subgoal_progress = False
+        has_valid_step = False
+        sims_executed = 0
 
         # Step 0: Fast-path one-step evaluation on top candidates
         initial_candidates = self.generate_candidate_actions(goal, params, num_candidates=8)
@@ -607,13 +683,40 @@ class DBFMCTSProver:
             if child.is_solved:
                 winning_node = child
                 solve_method = "one_step"
+                early_stopped = "qed"
                 break
+            if val >= 0.50:
+                has_subgoal_progress = True
+            elif val > 0.15:
+                has_valid_step = True
 
         # Step 1: Deep tree search if one-step did not close the proof
         if not winning_node:
-            for sim in range(simulations_budget):
+            for sim in range(max_allowed_sims):
+                sims_executed = sim + 1
                 if time.perf_counter() - t0 >= self.timeout_sec:
+                    early_stopped = "timeout"
                     break
+
+                # Dynamic budget allocation & surging check (AlphaProof-style)
+                if not surged and sim >= effective_budget:
+                    if dynamic_stopping.enabled and has_subgoal_progress:
+                        surged = True
+                        effective_budget = dynamic_stopping.max_surge_sims
+                    else:
+                        early_stopped = "budget_exhausted"
+                        break
+                elif surged and sim >= effective_budget:
+                    early_stopped = "budget_exhausted"
+                    break
+
+                # Theorem-Proving Barren-Tree Rejection Criterion (AAAI 2021 Dynamic Stopping)
+                if dynamic_stopping.enabled and sim >= dynamic_stopping.min_sims and not surged:
+                    max_child_q = max([c.q_value for c in root.children], default=0.0)
+                    if max_child_q <= dynamic_stopping.barren_value_threshold and not has_subgoal_progress:
+                        early_stopped = "barren_tree"
+                        break
+
                 time.sleep(0.005)  # Thermal pacing to allow CPU to drop to low-power C-states
                 leaf = self.select(root)
                 max_depth = max(max_depth, leaf.depth)
@@ -621,17 +724,54 @@ class DBFMCTSProver:
                 if leaf.is_solved:
                     winning_node = leaf
                     solve_method = "tree_search"
+                    early_stopped = "qed"
                     break
 
                 if leaf.depth >= self.max_depth:
                     leaf.is_terminal = True
                     continue
 
+                # AlphaProof-Style Progressive Candidate Sampling:
+                # When an intermediate node has multiple visits and viable value, sample fresh candidates
+                if leaf.children and not leaf.is_terminal and leaf.visits >= 3 and (leaf.total_value / leaf.visits) >= 0.50 and len(leaf.children) < 7:
+                    existing_tacs = {c.tactic for c in leaf.children}
+                    extra_candidates = self.generate_candidate_actions(leaf.goal, leaf.accumulated_hypotheses, num_candidates=3)
+                    for e_tac, e_prior in extra_candidates:
+                        if e_tac not in existing_tacs:
+                            existing_tacs.add(e_tac)
+                            new_script = f"{leaf.accumulated_script}\n{e_tac}" if leaf.accumulated_script else e_tac
+                            prog_child = DBFMCTSNode(
+                                node_id=f"{leaf.node_id}_prog{len(leaf.children)}",
+                                depth=leaf.depth + 1,
+                                goal=leaf.goal,
+                                tactic=e_tac,
+                                accumulated_script=new_script,
+                                accumulated_hypotheses=leaf.accumulated_hypotheses,
+                                parent=leaf,
+                                prior=e_prior
+                            )
+                            leaf.children.append(prog_child)
+                            nodes_expanded += 1
+                            val = self.evaluate(prog_child, raw_code)
+                            self.backpropagate(prog_child, val)
+                            if prog_child.is_solved:
+                                winning_node = prog_child
+                                solve_method = "tree_search"
+                                early_stopped = "qed"
+                                break
+                            if val >= 0.50:
+                                has_subgoal_progress = True
+                    if winning_node:
+                        break
+
                 # Expansion
                 if leaf.compiler_error and not leaf.is_diagnostic_node:
                     # In-Tree Compiler Diagnostic Branching
                     repairs_attempted += 1
                     leaf.is_terminal = True  # Mark leaf terminal once repaired so PUCT descends or branches
+                    err_cat = categorize_lean_error(leaf.compiler_error)
+                    leaf.error_category = err_cat
+
                     diag_repairs = self.generate_diagnostic_repairs(
                         goal=leaf.goal,
                         failed_tactic=leaf.tactic,
@@ -653,7 +793,8 @@ class DBFMCTSProver:
                             accumulated_hypotheses=leaf.accumulated_hypotheses,
                             parent=leaf.parent if leaf.parent else root,
                             prior=r_prior,
-                            is_diagnostic_node=True
+                            is_diagnostic_node=True,
+                            diagnostic_depth=1
                         )
                         (leaf.parent.children if leaf.parent else root.children).append(repair_child)
                         nodes_expanded += 1
@@ -664,13 +805,66 @@ class DBFMCTSProver:
                             repairs_succeeded += 1
                             winning_node = repair_child
                             solve_method = "diagnostic_repair"
+                            early_stopped = "qed"
                             break
+                        if val >= 0.50:
+                            has_subgoal_progress = True
                     if winning_node:
                         break
 
                 elif leaf.compiler_error and leaf.is_diagnostic_node:
+                    # Diagnostic Loop / Cycle Detection:
+                    # If this repair child failed again with the same error category as its parent, abort
+                    err_cat = categorize_lean_error(leaf.compiler_error)
+                    leaf.error_category = err_cat
+                    parent_err_cat = leaf.parent.error_category if leaf.parent else None
+
+                    if parent_err_cat == err_cat or leaf.diagnostic_depth >= dynamic_stopping.max_diagnostic_cycles:
+                        leaf.is_terminal = True
+                        continue
+
+                    # Otherwise, attempt secondary diagnostic repair
+                    repairs_attempted += 1
                     leaf.is_terminal = True
-                    continue
+                    diag_repairs = self.generate_diagnostic_repairs(
+                        goal=leaf.goal,
+                        failed_tactic=leaf.tactic,
+                        error_msg=leaf.compiler_error,
+                        num_repairs=1
+                    )
+                    for r_idx, (r_tac, r_prior) in enumerate(diag_repairs):
+                        if leaf.parent and leaf.parent.accumulated_script:
+                            new_script = f"{leaf.parent.accumulated_script}\n{r_tac}"
+                        else:
+                            new_script = r_tac
+
+                        repair_child = DBFMCTSNode(
+                            node_id=f"{leaf.node_id}_rep{r_idx}",
+                            depth=leaf.depth,
+                            goal=leaf.goal,
+                            tactic=r_tac,
+                            accumulated_script=new_script,
+                            accumulated_hypotheses=leaf.accumulated_hypotheses,
+                            parent=leaf.parent if leaf.parent else root,
+                            prior=r_prior,
+                            is_diagnostic_node=True,
+                            diagnostic_depth=leaf.diagnostic_depth + 1
+                        )
+                        (leaf.parent.children if leaf.parent else root.children).append(repair_child)
+                        nodes_expanded += 1
+
+                        val = self.evaluate(repair_child, raw_code)
+                        self.backpropagate(repair_child, val)
+                        if repair_child.is_solved:
+                            repairs_succeeded += 1
+                            winning_node = repair_child
+                            solve_method = "diagnostic_repair"
+                            early_stopped = "qed"
+                            break
+                        if val >= 0.50:
+                            has_subgoal_progress = True
+                    if winning_node:
+                        break
 
                 elif not leaf.children and not leaf.is_terminal:
                     # Multi-step continuation: condition on remaining subgoals and accumulate hypotheses
@@ -710,9 +904,15 @@ class DBFMCTSProver:
                         if step_child.is_solved:
                             winning_node = step_child
                             solve_method = "tree_search"
+                            early_stopped = "qed"
                             break
+                        if val >= 0.50:
+                            has_subgoal_progress = True
                     if winning_node:
                         break
+
+            if not winning_node and early_stopped is None:
+                early_stopped = "budget_exhausted"
 
         total_lat = (time.perf_counter() - t0) * 1000.0
 
@@ -735,7 +935,10 @@ class DBFMCTSProver:
             diagnostic_repairs_succeeded=repairs_succeeded,
             total_latency_ms=total_lat,
             solve_method=solve_method,
-            trajectory=trajectory
+            trajectory=trajectory,
+            early_stopped=early_stopped,
+            effective_simulations=sims_executed,
+            surged=surged
         )
 
 

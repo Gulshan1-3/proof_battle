@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT_DIR))
 sys.path.insert(0, str(ROOT_DIR / "scripts" / "ml"))
 
 import torch
-from dbf_mcts_prover import DBFMCTSProver, DBFMCTSResult
+from dbf_mcts_prover import DBFMCTSProver, DBFMCTSResult, DynamicStoppingConfig
 from lean_repl_client import LeanREPLClient
 
 DATA_DIR = ROOT_DIR / "data"
@@ -58,6 +58,9 @@ def evaluate_split(
     split_filter: str = "test",
     comp_filter: Optional[str] = None,
     simulations_budget: int = 32,
+    dynamic_stopping: bool = True,
+    min_sims: int = 4,
+    max_surge_sims: int = 96,
     num_workers: int = 4,
     timeout_sec: float = 30.0,
     device: str = "cuda",
@@ -78,11 +81,19 @@ def evaluate_split(
     print(f"STAGE 50: DBF-MCTS BENCHMARK EVALUATION (SPLIT: {split_filter.upper()}){tag_str}")
     if comp_filter:
         print(f"Competition Filter: {comp_filter}")
-    print(f"Simulations budget: {simulations_budget} | Workers: {num_workers} | Timeout: {timeout_sec}s | Device: {device}")
-    print("Search: Length-Normalized BFS + PUCT + Compiler Diagnostic Self-Repair")
+    ds_str = f"TP-DS-MCTS (min: {min_sims}, base: {simulations_budget}, surge: {max_surge_sims})" if dynamic_stopping else "Static Budget"
+    print(f"Simulations budget: {simulations_budget} ({ds_str}) | Workers: {num_workers} | Timeout: {timeout_sec}s | Device: {device}")
+    print("Search: Length-Normalized BFS + PUCT + Compiler Diagnostic Self-Repair + Dynamic Stopping")
     print("Purity: 100% Pure Neural (Zero Solver Fallbacks)")
     print("Memory Watchdog: Active (Limit 4.2 GiB)")
     print("=" * 80 + "\n")
+
+    ds_config = DynamicStoppingConfig(
+        enabled=dynamic_stopping,
+        min_sims=min_sims,
+        base_sims=simulations_budget,
+        max_surge_sims=max_surge_sims
+    )
 
     with open(MINIF2F_FILE, "r", encoding="utf-8") as f:
         all_probs = [json.loads(line) for line in f if line.strip()]
@@ -109,6 +120,9 @@ def evaluate_split(
     one_step_solves = 0
     tree_search_solves = 0
     diagnostic_repair_solves = 0
+    barren_pruned_count = 0
+    surged_count = 0
+    total_sims_saved = 0
 
     if resume and out_results.exists():
         with open(out_results, "r", encoding="utf-8") as f_in:
@@ -129,6 +143,11 @@ def evaluate_split(
                                     tree_search_solves += 1
                                 if record.get("diagnostic_repairs_succeeded", 0) > 0:
                                     diagnostic_repair_solves += 1
+                                if record.get("early_stopped") == "barren_tree":
+                                    barren_pruned_count += 1
+                                if record.get("surged"):
+                                    surged_count += 1
+                                total_sims_saved += max(0, simulations_budget - record.get("effective_simulations", simulations_budget))
                     except Exception:
                         pass
         print(f"Resuming: Loaded {len(completed_ids)} already completed problems from {out_results.name}")
@@ -154,7 +173,7 @@ def evaluate_split(
         try:
             with open(out_results, "a", encoding="utf-8") as f_out:
                 with ThreadPoolExecutor(max_workers=num_workers) as executor:
-                    futures = {executor.submit(prover.search, p, simulations_budget): p for p in probs_to_run}
+                    futures = {executor.submit(prover.search, p, simulations_budget, ds_config): p for p in probs_to_run}
                     for fut in as_completed(futures):
                         p_info = futures[fut]
                         try:
@@ -173,7 +192,10 @@ def evaluate_split(
                                 "diagnostic_repairs_succeeded": 0,
                                 "total_latency_ms": 0.0,
                                 "trajectory_steps": 0,
-                                "error": str(exc)
+                                "error": str(exc),
+                                "early_stopped": "error",
+                                "effective_simulations": 0,
+                                "surged": False
                             }
 
                         results.append(res_dict)
@@ -189,16 +211,25 @@ def evaluate_split(
                             if res_dict.get("diagnostic_repairs_succeeded", 0) > 0:
                                 diagnostic_repair_solves += 1
 
+                        if res_dict.get("early_stopped") == "barren_tree":
+                            barren_pruned_count += 1
+                        if res_dict.get("surged"):
+                            surged_count += 1
+                        total_sims_saved += max(0, simulations_budget - res_dict.get("effective_simulations", simulations_budget))
+
                         total_done = len(results)
                         py_rss, tree_rss = get_current_rss_gb()
                         avail_mem = psutil.virtual_memory().available / (1024 ** 3)
                         elapsed = time.time() - t_start
                         pct = round(solved_count / total_done * 100, 2)
                         sol_mark = " *** SOLVED ***" if res_dict.get("solved") else ""
+                        early_str = f" [{res_dict.get('early_stopped')}]" if res_dict.get("early_stopped") else ""
+                        surge_str = " [SURGED]" if res_dict.get("surged") else ""
                         print(
                             f"  Progress: {total_done:03d}/{len(probs):03d} | "
-                            f"Problem: {res_dict.get('problem_id')}{sol_mark} | "
+                            f"Problem: {res_dict.get('problem_id')}{sol_mark}{early_str}{surge_str} | "
                             f"Solved: {solved_count} ({pct}%) [1-Step: {one_step_solves} | Tree: {tree_search_solves} | Repaired: {diagnostic_repair_solves}] | "
+                            f"DS: [Barren: {barren_pruned_count} | Surged: {surged_count} | Saved: {total_sims_saved} sims] | "
                             f"PyRSS: {py_rss:.2f}G | TreeRSS: {tree_rss:.2f}G | Avail: {avail_mem:.2f}G | "
                             f"Elapsed: {elapsed/60:.1f}m",
                             flush=True
@@ -221,11 +252,17 @@ def evaluate_split(
         "tag": tag,
         "total_problems": len(probs),
         "simulations_budget": simulations_budget,
+        "dynamic_stopping_enabled": dynamic_stopping,
+        "min_sims": min_sims,
+        "max_surge_sims": max_surge_sims,
         "solved_count": solved_count,
         "solve_percentage": round(solved_count / len(probs) * 100, 2),
         "one_step_solves": one_step_solves,
         "tree_search_solves": tree_search_solves,
         "diagnostic_repair_solves": diagnostic_repair_solves,
+        "barren_pruned_count": barren_pruned_count,
+        "surged_count": surged_count,
+        "total_sims_saved": total_sims_saved,
         "final_py_rss_gb": round(py_final, 2),
         "final_tree_rss_gb": round(tree_final, 2)
     }
@@ -236,6 +273,10 @@ def evaluate_split(
     print(f"  - Solved via Fast 1-Step: {one_step_solves}")
     print(f"  - Solved via MCTS Tree Search: {tree_search_solves}")
     print(f"  - Solved via In-Tree Compiler Repair: {diagnostic_repair_solves}")
+    print(f"Dynamic Stopping (TP-DS-MCTS) Efficiency:")
+    print(f"  - Barren Trees Pruned Early: {barren_pruned_count}")
+    print(f"  - Compute Surged Trees: {surged_count}")
+    print(f"  - Simulations Saved vs Static: {total_sims_saved:,}")
     print("=" * 80 + "\n")
 
     with open(out_summary, "w", encoding="utf-8") as f:
@@ -250,6 +291,10 @@ if __name__ == "__main__":
     parser.add_argument("--split", type=str, default="test", choices=["valid", "test", "all"])
     parser.add_argument("--filter", type=str, default=None, help="Filter by competition or problem substring (e.g. aime, imo)")
     parser.add_argument("--simulations", type=int, default=32)
+    parser.add_argument("--dynamic-stopping", action="store_true", default=True, help="Enable Theorem-Proving Dynamic Simulation MCTS")
+    parser.add_argument("--no-dynamic-stopping", dest="dynamic_stopping", action="store_false", help="Disable dynamic stopping")
+    parser.add_argument("--min-sims", type=int, default=4, help="Min simulations before barren-tree rejection check")
+    parser.add_argument("--max-surge-sims", type=int, default=96, help="Max simulations when compute is surged")
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--device", type=str, default="cuda")
@@ -265,6 +310,9 @@ if __name__ == "__main__":
         split_filter=args.split,
         comp_filter=args.filter,
         simulations_budget=args.simulations,
+        dynamic_stopping=args.dynamic_stopping,
+        min_sims=args.min_sims,
+        max_surge_sims=args.max_surge_sims,
         num_workers=args.workers,
         timeout_sec=args.timeout,
         device=args.device,
