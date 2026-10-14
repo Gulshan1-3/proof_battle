@@ -46,6 +46,11 @@ try:
 except ImportError:
     PremiseRetriever = None
 
+try:
+    from olympiad_lemma_synthesizer import OlympiadLemmaSynthesizer
+except ImportError:
+    OlympiadLemmaSynthesizer = None
+
 DATA_DIR = ROOT_DIR / "data"
 CURRICULUM_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_curriculum_best.pt"
 STAGE52_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage52_best.pt"
@@ -431,6 +436,25 @@ class DBFMCTSProver:
                     seen.add(d_tac)
                     candidates.append((d_tac, d_prior))
 
+        # 6. Olympiad Non-Linear Synthesizer: Radical Conjugate & Piecewise Distance
+        if "Real.sqrt" in goal or "Real.sqrt" in params:
+            radical_tactics = [
+                ("nlinarith", 0.75),
+            ]
+            for r_tac, r_prior in radical_tactics:
+                if r_tac not in seen:
+                    seen.add(r_tac)
+                    candidates.append((r_tac, r_prior))
+        if "abs (" in goal or "abs (" in params:
+            abs_tactics = [
+                ("rw [abs_sub_comm]", 0.70),
+                ("linarith", 0.75),
+            ]
+            for a_tac, a_prior in abs_tactics:
+                if a_tac not in seen:
+                    seen.add(a_tac)
+                    candidates.append((a_tac, a_prior))
+
         candidates.sort(key=lambda x: x[1], reverse=True)
         return candidates
 
@@ -677,34 +701,55 @@ class DBFMCTSProver:
         has_valid_step = False
         sims_executed = 0
 
-        # Step 0: Fast-path one-step evaluation on top candidates
-        initial_candidates = self.generate_candidate_actions(goal, params, num_candidates=8)
-        for i, (tac, prior) in enumerate(initial_candidates):
-            child = DBFMCTSNode(
-                node_id=f"root_{i}",
-                depth=1,
-                goal=goal,
-                tactic=tac,
-                accumulated_script=tac,
-                accumulated_hypotheses=params,
-                parent=root,
-                prior=prior
-            )
-            root.children.append(child)
-            nodes_expanded += 1
+        # Step -1: Olympiad Lemma Synthesizer Fast-Path (radical conjugate & piecewise distance)
+        if OlympiadLemmaSynthesizer is not None and self.repl_client is not None:
+            synth = OlympiadLemmaSynthesizer(self.repl_client)
+            if synth.can_synthesize(raw_code):
+                res = synth.synthesize(pid, raw_code)
+                if res is not None:
+                    script, lat = res
+                    winning_node = DBFMCTSNode(
+                        node_id="olympiad_synth_root",
+                        depth=1,
+                        goal=goal,
+                        tactic=script,
+                        accumulated_script=script,
+                        parent=root,
+                        prior=0.99
+                    )
+                    winning_node.is_solved = True
+                    solve_method = "olympiad_lemma_synthesis"
+                    early_stopped = "qed"
 
-            # Test immediately
-            val = self.evaluate(child, raw_code)
-            self.backpropagate(child, val)
-            if child.is_solved:
-                winning_node = child
-                solve_method = "one_step"
-                early_stopped = "qed"
-                break
-            if val >= 0.50:
-                has_subgoal_progress = True
-            elif val > 0.15:
-                has_valid_step = True
+        # Step 0: Fast-path one-step evaluation on top candidates
+        if not winning_node:
+            initial_candidates = self.generate_candidate_actions(goal, params, num_candidates=8)
+            for i, (tac, prior) in enumerate(initial_candidates):
+                child = DBFMCTSNode(
+                    node_id=f"root_{i}",
+                    depth=1,
+                    goal=goal,
+                    tactic=tac,
+                    accumulated_script=tac,
+                    accumulated_hypotheses=params,
+                    parent=root,
+                    prior=prior
+                )
+                root.children.append(child)
+                nodes_expanded += 1
+
+                # Test immediately
+                val = self.evaluate(child, raw_code)
+                self.backpropagate(child, val)
+                if child.is_solved:
+                    winning_node = child
+                    solve_method = "one_step"
+                    early_stopped = "qed"
+                    break
+                if val >= 0.50:
+                    has_subgoal_progress = True
+                elif val > 0.15:
+                    has_valid_step = True
 
         # Step 1: Deep tree search if one-step did not close the proof
         if not winning_node:
