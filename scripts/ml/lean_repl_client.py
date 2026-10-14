@@ -288,6 +288,21 @@ class LeanREPLClient:
 
         messages = resp.get("messages", [])
         errors = [m["data"] for m in messages if m.get("severity") == "error"]
+        if "message" in resp and isinstance(resp["message"], str):
+            msg = resp["message"]
+            if "error" in msg.lower() or "failed" in msg.lower():
+                errors.append(msg)
+        if "error" in resp and isinstance(resp["error"], str):
+            errors.append(resp["error"])
+
+        new_ps = resp.get("proofState")
+        goals = resp.get("goals", [])
+        status = resp.get("proofStatus", "")
+
+        is_solved = (status == "Completed") or (len(goals) == 0 and new_ps is not None)
+
+        if not is_solved and new_ps is None and not errors:
+            errors.append(resp.get("message") or "Lean tactic failed to return new proofState")
 
         if errors:
             return {
@@ -297,12 +312,6 @@ class LeanREPLClient:
                 "error": "\n".join(errors),
                 "elapsed_ms": elapsed_ms
             }
-
-        new_ps = resp.get("proofState")
-        goals = resp.get("goals", [])
-        status = resp.get("proofStatus", "")
-
-        is_solved = (status == "Completed") or (len(goals) == 0 and new_ps is not None)
 
         return {
             "is_solved": is_solved,

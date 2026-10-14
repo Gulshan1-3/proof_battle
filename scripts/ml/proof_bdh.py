@@ -540,7 +540,9 @@ class ProofBDH(nn.Module):
         filtered = {k: v for k, v in cfg_dict.items() if k in valid_keys}
         config = BDHConfig(**filtered)
         model = cls(config)
-        model.load_state_dict(checkpoint["state_dict"], strict=False)
+        state_dict = checkpoint.get("state_dict") if "state_dict" in checkpoint else checkpoint.get("model_state_dict")
+        if state_dict is not None:
+            model.load_state_dict(state_dict, strict=False)
         model.to(device)
         return model
 

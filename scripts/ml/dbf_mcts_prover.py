@@ -47,11 +47,12 @@ except ImportError:
     PremiseRetriever = None
 
 DATA_DIR = ROOT_DIR / "data"
+RATIONALIZATION_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_rationalization_best.pt"
 CURRICULUM_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_curriculum_best.pt"
 STAGE52_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage52_best.pt"
 STAGE51_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage51.pt"
 MULTISTEP_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_multistep.pt"
-CHECKPOINT_PATH = CURRICULUM_CKPT if CURRICULUM_CKPT.exists() else (STAGE52_CKPT if STAGE52_CKPT.exists() else (STAGE51_CKPT if STAGE51_CKPT.exists() else (MULTISTEP_CKPT if MULTISTEP_CKPT.exists() else CLEAN_CKPT)))
+CHECKPOINT_PATH = RATIONALIZATION_CKPT if RATIONALIZATION_CKPT.exists() else (CURRICULUM_CKPT if CURRICULUM_CKPT.exists() else (STAGE52_CKPT if STAGE52_CKPT.exists() else (STAGE51_CKPT if STAGE51_CKPT.exists() else (MULTISTEP_CKPT if MULTISTEP_CKPT.exists() else CLEAN_CKPT))))
 STAGE58_95M = DATA_DIR / "native_prover" / "checkpoints" / "bdh_95m_stage58_best.pt"
 CURRICULUM_95M = DATA_DIR / "native_prover" / "checkpoints" / "bdh_95m_curriculum_best.pt"
 CKPT_95M = STAGE58_95M if STAGE58_95M.exists() else CURRICULUM_95M
@@ -334,7 +335,16 @@ class DBFMCTSProver:
         Returns: [(tactic_string, length_normalized_prior), ...]
         Zero cheat tables; 100% verified by Lean 4 kernel.
         """
-        prompt = f"<hyp> {params} </hyp> <goal> {goal} <plan> proof </plan><tactic>" if params else f"<goal> {goal} <plan> proof </plan><tactic>"
+        if "⊢" in goal:
+            sub_hyps, sub_target = parse_subgoal_hypotheses(goal)
+            sub_hyps = sub_hyps.replace("√", "Real.sqrt ").replace(" ^ ", "^")
+            target_goal = sub_target.replace("√", "Real.sqrt ").replace(" ^ ", "^")
+            all_params = sub_hyps if sub_hyps else params.replace("√", "Real.sqrt ").replace(" ^ ", "^")
+        else:
+            target_goal = goal.replace("√", "Real.sqrt ").replace(" ^ ", "^")
+            all_params = params.replace("√", "Real.sqrt ").replace(" ^ ", "^")
+
+        prompt = f"<hyp> {all_params} </hyp> <goal> {target_goal} <plan> proof </plan><tactic>" if all_params else f"<goal> {target_goal} <plan> proof </plan><tactic>"
         prompt_ids = self.tokenizer.encode(prompt, add_bos=True, add_eos=False)
 
         candidates: List[Tuple[str, float]] = []
@@ -349,7 +359,7 @@ class DBFMCTSProver:
             with self.gen_lock:
                 toks_greedy, mean_lp = active_model.generate_with_logprobs(
                     prompt_ids,
-                    max_new_tokens=96,
+                    max_new_tokens=80,
                     temperature=0.0,
                     top_k=5,
                     eos_id=self.eos_id
@@ -358,8 +368,7 @@ class DBFMCTSProver:
             tac_greedy = self._extract_tactic(text_greedy)
             if tac_greedy and tac_greedy not in seen:
                 seen.add(tac_greedy)
-                gen_len = max(1, len(toks_greedy) - len(prompt_ids))
-                prior = float(max(0.20, min(0.95, math.exp(mean_lp / (gen_len ** (self.alpha_len_norm - 1.0))))))
+                prior = float(max(0.25, min(0.95, math.exp(mean_lp))))
                 candidates.append((tac_greedy, prior))
 
             # 2. Context-Conditioned Neural Generation (Conditioned on retrieved Mathlib premises)
@@ -372,7 +381,7 @@ class DBFMCTSProver:
                     with self.gen_lock:
                         toks_ctx, mean_lp_ctx = active_model.generate_with_logprobs(
                             ctx_prompt_ids,
-                            max_new_tokens=96,
+                            max_new_tokens=80,
                             temperature=0.3,
                             top_k=15,
                             top_p=0.9,
@@ -382,19 +391,18 @@ class DBFMCTSProver:
                     tac_ctx = self._extract_tactic(text_ctx)
                     if tac_ctx and tac_ctx not in seen:
                         seen.add(tac_ctx)
-                        gen_len_ctx = max(1, len(toks_ctx) - len(ctx_prompt_ids))
-                        prior_ctx = float(max(0.15, min(0.90, math.exp(mean_lp_ctx / (gen_len_ctx ** (self.alpha_len_norm - 1.0))))))
+                        prior_ctx = float(max(0.20, min(0.90, math.exp(mean_lp_ctx))))
                         candidates.append((tac_ctx, prior_ctx))
 
             # 3. Stochastic nucleus sampling candidates (neural exploration branches)
             sampling_temps = [0.3, 0.7, 0.9]
-            n_samples = max(1, (num_candidates - 1) // len(models_to_query))
+            n_samples = min(3, max(1, (num_candidates - 1) // len(models_to_query)))
             for idx in range(n_samples):
                 temp = sampling_temps[idx % len(sampling_temps)]
                 with self.gen_lock:
                     toks_samp, mean_lp = active_model.generate_with_logprobs(
                         prompt_ids,
-                        max_new_tokens=96,
+                        max_new_tokens=80,
                         temperature=temp,
                         top_k=25,
                         top_p=0.9,
@@ -404,8 +412,7 @@ class DBFMCTSProver:
                 tac_samp = self._extract_tactic(text_samp)
                 if tac_samp and tac_samp not in seen:
                     seen.add(tac_samp)
-                    gen_len = max(1, len(toks_samp) - len(prompt_ids))
-                    prior = float(max(0.10, min(0.90, math.exp(mean_lp / (gen_len ** (self.alpha_len_norm - 1.0))))))
+                    prior = float(max(0.15, min(0.90, math.exp(mean_lp))))
                     candidates.append((tac_samp, prior))
 
         # 4. Mathlib Premise RAG tactical candidates (117k lemma semantic retrieval)
@@ -432,10 +439,23 @@ class DBFMCTSProver:
                     candidates.append((d_tac, d_prior))
 
         # 6. Olympiad Non-Linear Synthesizer: Radical Conjugate & Piecewise Distance
-        if "Real.sqrt" in goal or "Real.sqrt" in params:
+        if "Real.sqrt" in goal or "Real.sqrt" in params or "Real.sqrt" in all_params:
             radical_tactics = [
                 ("nlinarith", 0.75),
             ]
+            import re
+            radicands = re.findall(r"Real\.sqrt\s*(\([^)]+\))", f"{all_params} {goal}")
+            for rad_arg in set(radicands):
+                radical_tactics.append((f"have h_pos := Real.sqrt_nonneg {rad_arg}", 0.70))
+            rad_hyps = [h for h in all_params.split(", ") if ("Real.sqrt" in h or "h" in h) and ":" in h]
+            for rh in rad_hyps:
+                h_name = rh.split(":")[0].strip()
+                if h_name.isidentifier():
+                    radical_tactics.append((f"nlinarith [{h_name}]", 0.75))
+            if len(rad_hyps) >= 2:
+                names = [rh.split(":")[0].strip() for rh in rad_hyps if rh.split(":")[0].strip().isidentifier()]
+                if len(names) >= 2:
+                    radical_tactics.append((f"nlinarith [{', '.join(names[-3:])}]", 0.75))
             for r_tac, r_prior in radical_tactics:
                 if r_tac not in seen:
                     seen.add(r_tac)
@@ -496,10 +516,9 @@ class DBFMCTSProver:
         """Extracts tactic payload from autoregressive tags."""
         if "<tactic>" in text:
             t = text.split("<tactic>")[-1]
-            if "<qed>" in t:
-                t = t.split("<qed>")[0]
-            elif "<eos>" in t:
-                t = t.split("<eos>")[0]
+            for delim in ["<qed>", "<eos>", "<next", "\n"]:
+                if delim in t:
+                    t = t.split(delim)[0]
             return t.strip().lstrip(">").strip()
         return ""
 

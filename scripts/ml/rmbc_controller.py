@@ -72,7 +72,7 @@ class RecursiveMilestoneBeamCommitProver:
         self,
         prover: DBFMCTSProver,
         min_score: float = 0.40,
-        max_score: float = 0.85,
+        max_score: float = 1.0,
         beam_width: int = 8,
         max_recursion_depth: int = 15,
         local_mcts_quantum: int = 4,
@@ -206,8 +206,15 @@ class RecursiveMilestoneBeamCommitProver:
                 break
 
             # 2. Competitive Beam Evaluation & Milestone Detection
-            milestone_found = False
-            best_milestone = None
+            decomp_rank = 4.5 if ("∧" in active_subgoal or "↔" in active_subgoal) else 1
+            milestone_rank = {
+                MilestoneKind.FULL_QED: 5,
+                MilestoneKind.DECOMPOSITION: decomp_rank,
+                MilestoneKind.SUBGOAL_CLOSED: 4,
+                MilestoneKind.LEMMA_PROVED: 3,
+                MilestoneKind.SIMPLIFICATION: 2,
+            }
+            candidate_milestones: List[Tuple[MilestoneCommit, List[str]]] = []
             failing_candidates_count = 0
 
             for c_idx, (tac, prior) in enumerate(filtered_candidates):
@@ -261,6 +268,7 @@ class RecursiveMilestoneBeamCommitProver:
                             break
 
                 if (time.perf_counter() - t_global_start) * 1000.0 >= budget_ms:
+                    termination_reason = "budget_exhausted"
                     break
 
                 if (
@@ -280,8 +288,7 @@ class RecursiveMilestoneBeamCommitProver:
 
                 # Check Milestone 1: FULL QED
                 if is_solved or len(new_subgoals) == 0:
-                    milestone_found = True
-                    best_milestone = MilestoneCommit(
+                    commit = MilestoneCommit(
                         step_index=recursion_depth,
                         tactic=effective_tac,
                         kind=MilestoneKind.FULL_QED,
@@ -292,14 +299,12 @@ class RecursiveMilestoneBeamCommitProver:
                         proof_state_id=new_ps_id if new_ps_id is not None else curr_ps_id,
                         active_goal_before=active_subgoal
                     )
-                    # All other trees are destroyed
-                    trees_destroyed += (len(filtered_candidates) - 1)
+                    candidate_milestones.append((commit, []))
                     break
 
                 # Check Milestone 2: SUBGOAL REDUCTION (e.g. linarith closed a conjunct)
                 if len(new_subgoals) < subgoals_before_count:
-                    milestone_found = True
-                    best_milestone = MilestoneCommit(
+                    commit = MilestoneCommit(
                         step_index=recursion_depth,
                         tactic=effective_tac,
                         kind=MilestoneKind.SUBGOAL_CLOSED,
@@ -310,27 +315,103 @@ class RecursiveMilestoneBeamCommitProver:
                         proof_state_id=new_ps_id,
                         active_goal_before=active_subgoal
                     )
-                    # Sibling trees destroyed
-                    trees_destroyed += (len(filtered_candidates) - 1)
-                    break
+                    candidate_milestones.append((commit, new_subgoals))
+                    if prior >= 0.80:
+                        break
+                    continue
 
                 # Check Milestone 3: HYPOTHESIS ENRICHMENT (kernel-verified non-trivial lemma)
                 if effective_tac.strip().startswith("have ") and new_subgoals:
-                    milestone_found = True
-                    best_milestone = MilestoneCommit(
-                        step_index=recursion_depth,
-                        tactic=effective_tac,
-                        kind=MilestoneKind.LEMMA_PROVED,
-                        subgoals_before=subgoals_before_count,
-                        subgoals_after=len(new_subgoals),
-                        policy_prior=prior,
-                        lean_latency_ms=step_time,
-                        proof_state_id=new_ps_id,
-                        active_goal_before=active_subgoal
-                    )
-                    # Sibling trees destroyed
-                    trees_destroyed += (len(filtered_candidates) - 1)
-                    break
+                    if len(new_subgoals) <= subgoals_before_count:
+                        # Case A: Lemma is verified immediately by term or attached tactic
+                        commit = MilestoneCommit(
+                            step_index=recursion_depth,
+                            tactic=effective_tac,
+                            kind=MilestoneKind.LEMMA_PROVED,
+                            subgoals_before=subgoals_before_count,
+                            subgoals_after=len(new_subgoals),
+                            policy_prior=prior,
+                            lean_latency_ms=step_time,
+                            proof_state_id=new_ps_id,
+                            active_goal_before=active_subgoal
+                        )
+                        candidate_milestones.append((commit, new_subgoals))
+                        if prior >= 0.85:
+                            break
+                        continue
+                    elif len(new_subgoals) == subgoals_before_count + 1:
+                        # Case B: Bare have statement opened an unproven lemma subgoal.
+                        # Attempt to prove the lemma subgoal using standard solvers and active hypotheses:
+                        context_hyps = []
+                        for line in active_subgoal.split("\n"):
+                            if " : " in line and not line.strip().startswith("⊢"):
+                                h_name = line.split(" : ")[0].strip()
+                                if h_name and not any(c in h_name for c in " \t\n()[]{}.,:;+-*/=<>"):
+                                    context_hyps.append(h_name)
+
+                        lemma_solvers = ["ring", "linarith", "nlinarith", "norm_num"]
+                        for h_name in reversed(context_hyps):
+                            lemma_solvers.append(f"linarith [{h_name}]")
+                            lemma_solvers.append(f"nlinarith [{h_name}]")
+
+                        if len(context_hyps) >= 2:
+                            recent2 = ", ".join(context_hyps[-2:])
+                            lemma_solvers.append(f"nlinarith [{recent2}]")
+                            lemma_solvers.append(f"linarith [{recent2}]")
+                        if len(context_hyps) >= 3:
+                            recent3 = ", ".join(context_hyps[-3:])
+                            lemma_solvers.append(f"nlinarith [{recent3}]")
+
+                        ne_hyps = []
+                        eq_hyps = []
+                        for line in active_subgoal.split("\n"):
+                            if " : " in line and not line.strip().startswith("⊢"):
+                                h_name = line.split(" : ")[0].strip()
+                                if h_name and not any(c in h_name for c in " \t\n()[]{}.,:;+-*/=<>"):
+                                    if "≠ 0" in line:
+                                        ne_hyps.append(h_name)
+                                    if "=" in line:
+                                        eq_hyps.append(h_name)
+
+                        # Algebraic division cancellation via Mathlib div_eq_iff
+                        for h_ne in ne_hyps:
+                            for h_s in reversed(eq_hyps):
+                                lemma_solvers.append(f"exact (div_eq_iff {h_ne}).mpr (by linarith [{h_s}])")
+                                lemma_solvers.append(f"exact (div_eq_iff {h_ne}).mpr (by nlinarith [{h_s}])")
+
+                        lemma_closed = False
+                        for solver in lemma_solvers:
+                            t_sol_0 = time.perf_counter()
+                            sol_res = repl.step_tactic(new_ps_id, solver)
+                            sol_time = (time.perf_counter() - t_sol_0) * 1000.0
+                            total_lean_time_ms += sol_time
+                            total_simulations += 1
+                            total_expansions += 1
+                            if sol_res and sol_res.get("error") is None and sol_res.get("new_proof_state") is not None:
+                                sol_subgoals = sol_res.get("goals", [])
+                                if len(sol_subgoals) <= subgoals_before_count:
+                                    lemma_closed = True
+                                    effective_tac = f"{effective_tac.strip()} := by {solver}"
+                                    new_ps_id = sol_res.get("new_proof_state")
+                                    new_subgoals = sol_subgoals
+                                    step_time += sol_time
+                                    break
+                        if lemma_closed:
+                            commit = MilestoneCommit(
+                                step_index=recursion_depth,
+                                tactic=effective_tac,
+                                kind=MilestoneKind.LEMMA_PROVED,
+                                subgoals_before=subgoals_before_count,
+                                subgoals_after=len(new_subgoals),
+                                policy_prior=prior,
+                                lean_latency_ms=step_time,
+                                proof_state_id=new_ps_id,
+                                active_goal_before=active_subgoal
+                            )
+                            candidate_milestones.append((commit, new_subgoals))
+                            if prior >= 0.85:
+                                break
+                            continue
 
                 # Check Milestone 4: DECOMPOSITION (structural introduction/splitting of compound goal)
                 if (
@@ -338,8 +419,7 @@ class RecursiveMilestoneBeamCommitProver:
                     and new_subgoals
                     and new_ps_id is not None
                 ):
-                    milestone_found = True
-                    best_milestone = MilestoneCommit(
+                    commit = MilestoneCommit(
                         step_index=recursion_depth,
                         tactic=effective_tac,
                         kind=MilestoneKind.DECOMPOSITION,
@@ -350,17 +430,48 @@ class RecursiveMilestoneBeamCommitProver:
                         proof_state_id=new_ps_id,
                         active_goal_before=active_subgoal
                     )
-                    # Sibling trees destroyed
-                    trees_destroyed += (len(filtered_candidates) - 1)
-                    break
+                    candidate_milestones.append((commit, new_subgoals))
+                    if decomp_rank > 4 or prior >= 0.85:
+                        break
+                    continue
+
+                # Check Milestone 5: SIMPLIFICATION (kernel-verified rewrite advancing state)
+                if (
+                    effective_tac.strip().startswith("rw ")
+                    and new_subgoals
+                    and new_ps_id is not None
+                    and new_subgoals != [active_subgoal]
+                ):
+                    commit = MilestoneCommit(
+                        step_index=recursion_depth,
+                        tactic=effective_tac,
+                        kind=MilestoneKind.SIMPLIFICATION,
+                        subgoals_before=subgoals_before_count,
+                        subgoals_after=len(new_subgoals),
+                        policy_prior=prior,
+                        lean_latency_ms=step_time,
+                        proof_state_id=new_ps_id,
+                        active_goal_before=active_subgoal
+                    )
+                    candidate_milestones.append((commit, new_subgoals))
+                    if prior >= 0.80:
+                        break
+                    continue
 
             # 3. Hard Commit or Local Tree Step
-            if milestone_found and best_milestone is not None:
-                # Commit milestone step
+            milestone_found = False
+            best_milestone = None
+            if candidate_milestones:
+                best_milestone, winning_subgoals = max(
+                    candidate_milestones,
+                    key=lambda item: (milestone_rank[item[0].kind], item[0].policy_prior)
+                )
+                milestone_found = True
+                trees_destroyed += (len(filtered_candidates) - 1)
                 committed_script_steps.append(best_milestone.tactic)
                 commits.append(best_milestone)
                 curr_ps_id = best_milestone.proof_state_id
-                curr_subgoals = new_subgoals
+                curr_subgoals = winning_subgoals
 
                 if best_milestone.kind == MilestoneKind.FULL_QED:
                     termination_reason = "solved"
@@ -399,7 +510,10 @@ class RecursiveMilestoneBeamCommitProver:
                         break
                 else:
                     # Neither 1-step nor shallow 2-step produced an approved milestone
-                    termination_reason = "frontier_stalled_no_milestones"
+                    if (time.perf_counter() - t_global_start) * 1000.0 >= budget_ms:
+                        termination_reason = "budget_exhausted"
+                    else:
+                        termination_reason = "frontier_stalled_no_milestones"
                     break
 
         total_elapsed_ms = (time.perf_counter() - t_global_start) * 1000.0
@@ -418,7 +532,12 @@ class RecursiveMilestoneBeamCommitProver:
                         thm_name = candidate_name
                         break
 
-            full_code = f"{stmt_clean} := by\n  {winning_script}"
+            script_lines = []
+            for step in committed_script_steps:
+                for line in step.split("\n"):
+                    if line.strip():
+                        script_lines.append(f"  {line.strip()}")
+            full_code = f"{stmt_clean} := by\n" + "\n".join(script_lines)
             ok, _, err_msg, axioms = repl.verify_full_code(full_code, thm_name)
             if not ok or "sorryAx" in axioms:
                 is_solved = False

@@ -45,9 +45,9 @@ VALID_THEOREMS_SVE = [
 def run_rmbc_on_problem(
     problem: Dict[str, Any],
     budget_sec: float = 60.0,
-    min_score: float = 0.40,
-    max_score: float = 0.85,
-    beam_width: int = 5,
+    min_score: float = 0.15,
+    max_score: float = 1.0,
+    beam_width: int = 15,
 ) -> RMBCSearchResult:
     prover = DBFMCTSProver(use_repl=True)
     rmbc = RecursiveMilestoneBeamCommitProver(
