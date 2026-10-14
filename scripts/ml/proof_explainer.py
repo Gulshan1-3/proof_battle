@@ -96,12 +96,6 @@ class ProofExplainer:
         theorem_name = self.extract_theorem_name(raw_code)
         stmt = self.clean_header(raw_code)
 
-        # 0. Specialized Olympiad Non-Linear & Piecewise Decompositions
-        if "imo_1960_p2" in problem_id or "aime_1983_p2" in problem_id:
-            explained = self._try_olympiad_decomposition(problem_id, theorem_name, stmt, compact_script)
-            if explained and explained.verified:
-                return explained
-
         # 1. Specialized Conjunction / Biconditional Decomposition
         if "∧" in stmt or "constructor" in compact_script:
             explained = self._try_conjunction_decomposition(problem_id, theorem_name, stmt, compact_script)
@@ -128,110 +122,6 @@ class ProofExplainer:
 
         # 5. Single Tactic Structural Annotation (fallback)
         return self._annotate_single_tactic(problem_id, theorem_name, stmt, compact_script)
-
-    def _try_olympiad_decomposition(
-        self,
-        problem_id: str,
-        theorem_name: str,
-        stmt: str,
-        compact_script: str
-    ) -> Optional[ExplainedProof]:
-        if "imo_1960_p2" in problem_id:
-            cand = """  -- Step 1: Prove linear lower bound -(1/2) ≤ x from non-negativity of radicand
-  have h_left : -(1 / 2) ≤ x := by linarith [h₀]
-
-  -- Step 2: Introduce radical substitution variable u = √(1 + 2x)
-  set u := Real.sqrt (1 + 2 * x) with hu
-  have hu_nonneg : 0 ≤ u := Real.sqrt_nonneg (1 + 2 * x)
-  have hu_sq : u^2 = 1 + 2 * x := Real.sq_sqrt h₀
-
-  -- Step 3: Compute difference-of-squares conjugate product: (1 - u)(1 + u) = -2x
-  have h_prod : (1 - u) * (1 + u) = -2 * x := by
-    calc
-      (1 - u) * (1 + u) = 1 - u^2 := by ring
-      _ = 1 - (1 + 2 * x) := by rw [hu_sq]
-      _ = -2 * x := by ring
-
-  -- Step 4: Rationalize denominator: 4x² / (1 - u)² = (1 + u)²
-  have h_div : (4 * x^2) / (1 - u)^2 = (1 + u)^2 := by
-    have h_exp : 4 * x^2 = (1 + u)^2 * (1 - u)^2 := by
-      calc
-        4 * x^2 = (-2 * x)^2 := by ring
-        _ = ((1 - u) * (1 + u))^2 := by rw [← h_prod]
-        _ = (1 + u)^2 * (1 - u)^2 := by ring
-    exact (div_eq_iff h₁).mpr h_exp
-
-  -- Step 5: Substitute rationalized denominator into hypothesis h₂: (1 + u)² < 2x + 9
-  have h_ineq : (1 + u)^2 < 2 * x + 9 := by
-    calc
-      (1 + u)^2 = (4 * x^2) / (1 - u)^2 := by rw [h_div]
-      _ < 2 * x + 9 := h₂
-
-  -- Step 6: Expand (1 + u)² = 2x + 2 + 2u
-  have h_expand : (1 + u)^2 = 2 * x + 2 + 2 * u := by
-    calc
-      (1 + u)^2 = 1 + 2 * u + u^2 := by ring
-      _ = 1 + 2 * u + (1 + 2 * x) := by rw [hu_sq]
-      _ = 2 * x + 2 + 2 * u := by ring
-
-  -- Step 7: Cancel 2x to isolate radical bound: u < 7/2
-  have h_u_bound : u < 7 / 2 := by
-    linarith [h_ineq, h_expand]
-
-  -- Step 8: Square both sides and deduce upper bound x < 45/8
-  have h_right : x < 45 / 8 := by
-    have h_sq_bound : u^2 < (7 / 2)^2 := by
-      nlinarith [hu_nonneg, h_u_bound]
-    linarith [hu_sq, h_sq_bound]
-
-  -- Step 9: Construct final conjunction ⟨-(1/2) ≤ x, x < 45/8⟩
-  exact ⟨h_left, h_right⟩"""
-            full_code = f"{stmt} := by\n{cand}"
-            ok, lat, err, axioms = self.repl.verify_full_code(full_code, theorem_name)
-            if ok:
-                return ExplainedProof(
-                    problem_id=problem_id,
-                    theorem_name=theorem_name,
-                    original_script=compact_script,
-                    step_by_step_script=cand,
-                    step_count=9,
-                    strategy="RadicalConjugateRationalization",
-                    verified=True,
-                    axioms=axioms,
-                    latency_ms=lat
-                )
-
-        if "aime_1983_p2" in problem_id:
-            cand = """  -- Step 1: Expand piecewise distance function f(x)
-  rw [h₂]
-  -- Step 2: Evaluate first absolute value abs(x - p) = x - p (since x ≥ p)
-  have h_abs1 : abs (x - p) = x - p := abs_of_nonneg (by linarith [h₁.1])
-  -- Step 3: Evaluate second absolute value abs(x - 15) = 15 - x (since x ≤ 15)
-  have h_abs2 : abs (x - 15) = 15 - x := by
-    rw [abs_sub_comm]
-    exact abs_of_nonneg (by linarith [h₁.2])
-  -- Step 4: Evaluate third absolute value abs(x - p - 15) = 15 + p - x (since x - p - 15 ≤ 0)
-  have h_abs3 : abs (x - p - 15) = 15 + p - x := by
-    have : x - p - 15 ≤ 0 := by linarith [h₁.2, h₀.1]
-    have h_neg : abs (x - p - 15) = - (x - p - 15) := abs_of_nonpos this
-    linarith [h_neg]
-  -- Step 5: Sum simplified terms: (x - p) + (15 - x) + (15 + p - x) = 30 - x ≥ 15
-  linarith [h_abs1, h_abs2, h_abs3, h₁.2]"""
-            full_code = f"{stmt} := by\n{cand}"
-            ok, lat, err, axioms = self.repl.verify_full_code(full_code, theorem_name)
-            if ok:
-                return ExplainedProof(
-                    problem_id=problem_id,
-                    theorem_name=theorem_name,
-                    original_script=compact_script,
-                    step_by_step_script=cand,
-                    step_count=5,
-                    strategy="PiecewiseAbsoluteDistanceAnalysis",
-                    verified=True,
-                    axioms=axioms,
-                    latency_ms=lat
-                )
-        return None
 
     def _try_conjunction_decomposition(
         self,

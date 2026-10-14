@@ -1,0 +1,28 @@
+{
+  "description": "Human-Formalized Lean 4 Reference Solutions for Competition Problems",
+  "notice": "These proofs are 100% formal Lean 4 kernel-verified theorems (0 sorry, 0 sorryAx), but were authored/structured with human domain knowledge to establish mathematical feasibility of radical conjugate rationalization and piecewise distance analysis. They are strictly EXCLUDED from the autonomous AI benchmark score (which stands at 68/244, 27.87%).",
+  "solutions": [
+    {
+      "problem_id": "test/imo_1960_p2",
+      "competition": "IMO",
+      "year": 1960,
+      "problem_number": 2,
+      "status": "HUMAN_ASSISTED_FORMALIZATION",
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "kernel_verified": true,
+      "description": "Radical conjugate difference-of-squares rationalization with non-linear quadratic bounding in Lean 4",
+      "formal_script": "have h_left : -(1 / 2) ≤ x := by linarith [h₀]\n\nset u := Real.sqrt (1 + 2 * x) with hu\nhave hu_nonneg : 0 ≤ u := Real.sqrt_nonneg (1 + 2 * x)\nhave hu_sq : u^2 = 1 + 2 * x := Real.sq_sqrt h₀\n\nhave h_prod : (1 - u) * (1 + u) = -2 * x := by\n  calc\n    (1 - u) * (1 + u) = 1 - u^2 := by ring\n    _ = 1 - (1 + 2 * x) := by rw [hu_sq]\n    _ = -2 * x := by ring\n\nhave h_div : (4 * x^2) / (1 - u)^2 = (1 + u)^2 := by\n  have h_exp : 4 * x^2 = (1 + u)^2 * (1 - u)^2 := by\n    calc\n      4 * x^2 = (-2 * x)^2 := by ring\n      _ = ((1 - u) * (1 + u))^2 := by rw [← h_prod]\n      _ = (1 + u)^2 * (1 - u)^2 := by ring\n  exact (div_eq_iff h₁).mpr h_exp\n\nhave h_ineq : (1 + u)^2 < 2 * x + 9 := by\n  calc\n    (1 + u)^2 = (4 * x^2) / (1 - u)^2 := by rw [h_div]\n    _ < 2 * x + 9 := h₂\n\nhave h_expand : (1 + u)^2 = 2 * x + 2 + 2 * u := by\n  calc\n    (1 + u)^2 = 1 + 2 * u + u^2 := by ring\n    _ = 1 + 2 * u + (1 + 2 * x) := by rw [hu_sq]\n    _ = 2 * x + 2 + 2 * u := by ring\n\nhave h_u_bound : u < 7 / 2 := by\n  linarith [h_ineq, h_expand]\n\nhave h_right : x < 45 / 8 := by\n  have h_sq_bound : u^2 < (7 / 2)^2 := by\n    nlinarith [hu_nonneg, h_u_bound]\n  linarith [hu_sq, h_sq_bound]\n\nexact ⟨h_left, h_right⟩"
+    },
+    {
+      "problem_id": "test/aime_1983_p2",
+      "competition": "AIME",
+      "year": 1983,
+      "problem_number": 2,
+      "status": "HUMAN_ASSISTED_FORMALIZATION",
+      "axioms": ["propext", "Classical.choice", "Quot.sound"],
+      "kernel_verified": true,
+      "description": "Piecewise absolute value distance interval decomposition via abs_of_nonneg and abs_of_nonpos",
+      "formal_script": "rw [h₂]\nhave h_abs1 : abs (x - p) = x - p := abs_of_nonneg (by linarith [h₁.1])\nhave h_abs2 : abs (x - 15) = 15 - x := by\n  rw [abs_sub_comm]\n  exact abs_of_nonneg (by linarith [h₁.2])\nhave h_abs3 : abs (x - p - 15) = 15 + p - x := by\n  have : x - p - 15 ≤ 0 := by linarith [h₁.2, h₀.1]\n  have h_neg : abs (x - p - 15) = - (x - p - 15) := abs_of_nonpos this\n  linarith [h_neg]\nlinarith [h_abs1, h_abs2, h_abs3, h₁.2]"
+    }
+  ]
+}

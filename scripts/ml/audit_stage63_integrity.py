@@ -25,7 +25,6 @@ sys.path.insert(0, str(ROOT_DIR / "scripts" / "ml"))
 import torch
 from proof_bdh import ProofBDH
 from lean_repl_client import LeanREPLClient
-from olympiad_lemma_synthesizer import OlympiadLemmaSynthesizer
 
 DATA_DIR = ROOT_DIR / "data"
 MINIF2F_FILE = DATA_DIR / "minif2f_full_488.jsonl"
@@ -184,17 +183,7 @@ def audit_formal_axioms_and_kernel() -> Dict[str, Any]:
                 d = json.loads(line)
                 minif2f_map[d["problem_id"]] = d
 
-    # 3. Add newly unlocked IMO 1960 P2 and AIME 1983 P2
-    synth = OlympiadLemmaSynthesizer()
-    for pid in ["test/imo_1960_p2", "test/aime_1983_p2"]:
-        if pid not in solved_map and pid in minif2f_map:
-            raw = minif2f_map[pid]["raw_code"]
-            res = synth.synthesize(pid, raw)
-            if res:
-                solved_map[pid] = res[0]
-    synth.close()
-
-    print(f"Total unique solved theorems to formally audit: {len(solved_map)}")
+    print(f"Total unique autonomously solved theorems to formally audit: {len(solved_map)}")
 
     repl = LeanREPLClient()
     verified_clean = 0
