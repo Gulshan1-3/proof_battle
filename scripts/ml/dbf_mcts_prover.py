@@ -108,7 +108,7 @@ def parse_subgoal_hypotheses(goal_text: str) -> Tuple[str, str]:
 class DynamicStoppingConfig:
     """Configuration for Theorem-Proving Dynamic Simulation MCTS (TP-DS-MCTS)."""
     enabled: bool = True
-    min_sims: int = 4                       # Min simulations before barren-tree rejection check
+    min_sims: int = 16                      # Min simulations before barren-tree rejection check (calibrated in Stage 61)
     base_sims: int = 32                     # Base simulation budget per problem
     max_surge_sims: int = 96                # Max simulation budget when compute is surged
     barren_value_threshold: float = 0.15    # Threshold below which nodes are considered non-progressing
@@ -242,7 +242,7 @@ class DBFMCTSProver:
         c_puct: float = 1.414,
         alpha_len_norm: float = 0.7,
         max_depth: int = 8,
-        timeout_sec: float = 14.0,
+        timeout_sec: float = 45.0,
         device: Optional[str] = None,
         use_repl: bool = True,
         tier: Optional[str] = None
@@ -416,6 +416,21 @@ class DBFMCTSProver:
                     seen.add(p_tac)
                     candidates.append((p_tac, p_prior))
 
+        # 5. AlphaProof Phase 2: Structural Goal Decomposition for Conjunctions & Biconditionals
+        if "∧" in goal or "↔" in goal:
+            decomp_tactics = [
+                ("constructor <;> linarith", 0.85),
+                ("constructor <;> omega", 0.85),
+                ("constructor <;> ring", 0.80),
+                ("constructor <;> norm_num", 0.80),
+                ("constructor <;> aesop", 0.80),
+                ("constructor", 0.75),
+            ]
+            for d_tac, d_prior in decomp_tactics:
+                if d_tac not in seen:
+                    seen.add(d_tac)
+                    candidates.append((d_tac, d_prior))
+
         candidates.sort(key=lambda x: x[1], reverse=True)
         return candidates
 
@@ -582,8 +597,9 @@ class DBFMCTSProver:
             node.remaining_subgoals = subgoals
             parent_target = node.goal.split("⊢")[-1].strip()
             child_target = subgoals[0].split("⊢")[-1].strip() if subgoals else ""
+            parent_n_goals = len(node.parent.remaining_subgoals) if (node.parent and node.parent.remaining_subgoals) else 1
 
-            if child_target and child_target != parent_target:
+            if len(subgoals) < parent_n_goals or (child_target and child_target != parent_target):
                 node.compiler_error = err  # Retain error so in-tree diagnostic repair can synthesize completions
                 n_goals = max(1, len(subgoals))
                 return float(max(0.50, min(0.85, 0.50 + 0.35 / (1.0 + n_goals))))
@@ -694,7 +710,8 @@ class DBFMCTSProver:
         if not winning_node:
             for sim in range(max_allowed_sims):
                 sims_executed = sim + 1
-                if time.perf_counter() - t0 >= self.timeout_sec:
+                curr_timeout = max(self.timeout_sec, 75.0) if surged else self.timeout_sec
+                if time.perf_counter() - t0 >= curr_timeout:
                     early_stopped = "timeout"
                     break
 
@@ -884,6 +901,16 @@ class DBFMCTSProver:
                             curr_hyps = f"{curr_hyps} {' '.join(intro_hyps)}".strip()
 
                     action_candidates = self.generate_candidate_actions(next_goal, curr_hyps, num_candidates=3)
+                    if len(leaf.remaining_subgoals) >= 2:
+                        for ag_tac, ag_prior in [
+                            ("all_goals linarith", 0.70),
+                            ("all_goals omega", 0.70),
+                            ("all_goals ring", 0.65),
+                            ("all_goals norm_num", 0.65),
+                            ("all_goals aesop", 0.65)
+                        ]:
+                            if not any(c[0] == ag_tac for c in action_candidates):
+                                action_candidates.append((ag_tac, ag_prior))
                     for c_idx, (tac, prior) in enumerate(action_candidates):
                         new_script = f"{leaf.accumulated_script}\n{tac}" if leaf.accumulated_script else tac
                         step_child = DBFMCTSNode(

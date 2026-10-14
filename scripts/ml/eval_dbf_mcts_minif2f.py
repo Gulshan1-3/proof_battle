@@ -59,12 +59,12 @@ def evaluate_split(
     comp_filter: Optional[str] = None,
     simulations_budget: int = 32,
     dynamic_stopping: bool = True,
-    min_sims: int = 4,
+    min_sims: int = 16,
     max_surge_sims: int = 96,
     num_workers: int = 4,
-    timeout_sec: float = 30.0,
+    timeout_sec: float = 45.0,
     device: str = "cuda",
-    tag: Optional[str] = "stage50",
+    tag: Optional[str] = "stage61_tp_ds_mcts_subgoals",
     resume: bool = True,
     checkpoint_path: Optional[str] = None,
     vocab_path: Optional[str] = None
@@ -293,12 +293,12 @@ if __name__ == "__main__":
     parser.add_argument("--simulations", type=int, default=32)
     parser.add_argument("--dynamic-stopping", action="store_true", default=True, help="Enable Theorem-Proving Dynamic Simulation MCTS")
     parser.add_argument("--no-dynamic-stopping", dest="dynamic_stopping", action="store_false", help="Disable dynamic stopping")
-    parser.add_argument("--min-sims", type=int, default=4, help="Min simulations before barren-tree rejection check")
+    parser.add_argument("--min-sims", type=int, default=16, help="Min simulations before barren-tree rejection check")
     parser.add_argument("--max-surge-sims", type=int, default=96, help="Max simulations when compute is surged")
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--tag", type=str, default="stage50")
+    parser.add_argument("--tag", type=str, default="stage61_tp_ds_mcts_subgoals")
     parser.add_argument("--checkpoint", type=str, default=None, help="Custom checkpoint path")
     parser.add_argument("--vocab", type=str, default=None, help="Custom vocab path")
     parser.add_argument("--resume", action="store_true", default=True)
