@@ -175,8 +175,9 @@ class LeanREPLClient:
         """
         t0 = time.perf_counter()
         stmt = self._prepare_statement(raw_code)
-        lines = [line.strip() for line in tactic_script.strip().split("\n") if line.strip()]
-        indented = "\n  ".join(lines)
+        import textwrap
+        dedented = textwrap.dedent(tactic_script).strip()
+        indented = "\n  ".join(dedented.split("\n"))
         full_cmd = f"{stmt} := by\n  {indented}"
 
         with self.lock:

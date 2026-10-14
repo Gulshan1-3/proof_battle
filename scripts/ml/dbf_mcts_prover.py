@@ -46,6 +46,11 @@ try:
 except ImportError:
     PremiseRetriever = None
 
+try:
+    from auxiliary_construction_engine import AuxiliaryConstructionEngine
+except ImportError:
+    AuxiliaryConstructionEngine = None
+
 DATA_DIR = ROOT_DIR / "data"
 CURRICULUM_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_curriculum_best.pt"
 STAGE52_CKPT = DATA_DIR / "native_prover" / "checkpoints" / "bdh_9m_stage52_best.pt"
@@ -298,6 +303,11 @@ class DBFMCTSProver:
         else:
             self.retriever = None
 
+        if AuxiliaryConstructionEngine is not None and use_repl:
+            self.aux_engine = AuxiliaryConstructionEngine(self.repl_client)
+        else:
+            self.aux_engine = None
+
     def close(self):
         """Clean up background REPL process if active."""
         if self.repl_client is not None:
@@ -326,7 +336,8 @@ class DBFMCTSProver:
         self,
         goal: str,
         params: str = "",
-        num_candidates: int = 4
+        num_candidates: int = 4,
+        raw_code: str = ""
     ) -> List[Tuple[str, float]]:
         """
         Generates candidate next-step tactical actions combining ProofBDH neural autoregression
@@ -431,7 +442,15 @@ class DBFMCTSProver:
                     seen.add(d_tac)
                     candidates.append((d_tac, d_prior))
 
-        # 6. Olympiad Non-Linear Synthesizer: Radical Conjugate & Piecewise Distance
+        # 6. Stage 64: AlphaGeometry Auxiliary Construction Engine (Syntax-driven mathematical objects)
+        if self.aux_engine is not None and raw_code:
+            aux_proposals = self.aux_engine.propose_constructions(goal, params, raw_code)
+            for a_tac, a_prior, _ in aux_proposals:
+                if a_tac not in seen:
+                    seen.add(a_tac)
+                    candidates.append((a_tac, a_prior))
+
+        # 7. Olympiad Non-Linear Synthesizer: Radical Conjugate & Piecewise Distance
         if "Real.sqrt" in goal or "Real.sqrt" in params:
             radical_tactics = [
                 ("nlinarith", 0.75),
@@ -697,7 +716,7 @@ class DBFMCTSProver:
         sims_executed = 0
 
         # Step 0: Fast-path one-step evaluation on top candidates
-        initial_candidates = self.generate_candidate_actions(goal, params, num_candidates=8)
+        initial_candidates = self.generate_candidate_actions(goal, params, num_candidates=8, raw_code=raw_code)
         for i, (tac, prior) in enumerate(initial_candidates):
             child = DBFMCTSNode(
                 node_id=f"root_{i}",
@@ -771,7 +790,7 @@ class DBFMCTSProver:
                 # When an intermediate node has multiple visits and viable value, sample fresh candidates
                 if leaf.children and not leaf.is_terminal and leaf.visits >= 3 and (leaf.total_value / leaf.visits) >= 0.50 and len(leaf.children) < 7:
                     existing_tacs = {c.tactic for c in leaf.children}
-                    extra_candidates = self.generate_candidate_actions(leaf.goal, leaf.accumulated_hypotheses, num_candidates=3)
+                    extra_candidates = self.generate_candidate_actions(leaf.goal, leaf.accumulated_hypotheses, num_candidates=3, raw_code=raw_code)
                     for e_tac, e_prior in extra_candidates:
                         if e_tac not in existing_tacs:
                             existing_tacs.add(e_tac)
@@ -919,7 +938,7 @@ class DBFMCTSProver:
                         if intro_hyps:
                             curr_hyps = f"{curr_hyps} {' '.join(intro_hyps)}".strip()
 
-                    action_candidates = self.generate_candidate_actions(next_goal, curr_hyps, num_candidates=3)
+                    action_candidates = self.generate_candidate_actions(next_goal, curr_hyps, num_candidates=3, raw_code=raw_code)
                     if len(leaf.remaining_subgoals) >= 2:
                         for ag_tac, ag_prior in [
                             ("all_goals linarith", 0.70),
